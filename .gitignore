@@ -1,0 +1,6 @@
+.DS_Store
+__pycache__/
+*.pyc
+.codex_tmp/
+~$*.xlsx
+outputs/~$*.xlsx
