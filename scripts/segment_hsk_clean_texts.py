@@ -167,7 +167,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "使用 PyNLPIR 对 clean_text 作文分词，并生成词性统计宽表。"
-            "请用：arch -x86_64 /usr/bin/python3 segment_hsk_clean_texts.py"
+            "请用：arch -x86_64 /usr/bin/python3 scripts/segment_hsk_clean_texts.py"
         ),
     )
     parser.add_argument("--workbook", default=DEFAULT_WORKBOOK, help=f"作文主表，默认：{DEFAULT_WORKBOOK}")
@@ -201,7 +201,7 @@ def require_x86_64() -> None:
     if platform.machine() != "x86_64":
         raise RuntimeError(
             "PyNLPIR 当前只能在 x86_64 Python 下运行。请使用：\n"
-            "  arch -x86_64 /usr/bin/python3 segment_hsk_clean_texts.py"
+            "  arch -x86_64 /usr/bin/python3 scripts/segment_hsk_clean_texts.py"
         )
 
 

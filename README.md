@@ -8,11 +8,14 @@
 .
 ├── 4.14作文前筛.xlsx
 ├── 作文样本主表.xlsx
-├── sample_essays_by_score.py
-├── fetch_hsk_ori_texts.py
-├── clean_hsk_ori_texts.py
-├── segment_hsk_clean_texts.py
-├── linguistic_features.py
+├── scripts/
+│   ├── __init__.py
+│   ├── sample_essays_by_score.py
+│   ├── fetch_hsk_ori_texts.py
+│   ├── clean_hsk_ori_texts.py
+│   ├── extract_hsk_vocabulary.py
+│   ├── segment_hsk_clean_texts.py
+│   └── linguistic_features.py
 ├── resources/
 │   └── 语言特征词表.csv
 ├── tests/
@@ -53,11 +56,12 @@
 
 ### 脚本
 
-- `sample_essays_by_score.py`：按分数段抽样作文，尽量保持国籍多样和数量均衡，并排除中国香港、中国台湾、中国澳门和中国少数民族样本。
-- `fetch_hsk_ori_texts.py`：批量从 HSK 网站接口抓取原始标注文本，保存到 `ori_text`。
-- `clean_hsk_ori_texts.py`：清洗 `ori_text`，生成 `clean_text`，不修改原始文本。
-- `segment_hsk_clean_texts.py`：使用 PyNLPIR 对 `clean_text` 分词，生成 `seg_text` 和语言特征宽表；细粒度词性用于语法特征，大类中文词性继续写入分词文本。
-- `linguistic_features.py`：不依赖 PyNLPIR 运行环境的纯计算模块，负责词汇、句段、语法、篇章、记叙描写和 HSK 派生特征。
+- `scripts/sample_essays_by_score.py`：按分数段抽样作文，尽量保持国籍多样和数量均衡，并排除中国香港、中国台湾、中国澳门和中国少数民族样本。
+- `scripts/fetch_hsk_ori_texts.py`：批量从 HSK 网站接口抓取原始标注文本，保存到 `ori_text`。
+- `scripts/clean_hsk_ori_texts.py`：清洗 `ori_text`，生成 `clean_text`，不修改原始文本。
+- `scripts/extract_hsk_vocabulary.py`：从新版 HSK 考试大纲 PDF 提取机器可读词汇 CSV。
+- `scripts/segment_hsk_clean_texts.py`：使用 PyNLPIR 对 `clean_text` 分词，生成 `seg_text` 和语言特征宽表；细粒度词性用于语法特征，大类中文词性继续写入分词文本。
+- `scripts/linguistic_features.py`：不依赖 PyNLPIR 运行环境的纯计算模块，负责词汇、句段、语法、篇章、记叙描写和 HSK 派生特征。
 - `resources/语言特征词表.csv`：可人工审查的语言特征词表，字段为 `大类、特征名、词项、允许词性前缀、来源说明`。
 - `tests/test_linguistic_features.py`：纯函数单元测试，覆盖 MATTR、句段切分、词表最长匹配、连续动词和 HSK 派生统计等口径。
 
@@ -66,19 +70,19 @@
 抓取原始文本：
 
 ```bash
-python fetch_hsk_ori_texts.py
+python scripts/fetch_hsk_ori_texts.py
 ```
 
 清洗原始文本：
 
 ```bash
-python clean_hsk_ori_texts.py
+python scripts/clean_hsk_ori_texts.py
 ```
 
 分词并生成词性统计宽表：
 
 ```bash
-arch -x86_64 /usr/bin/python3 segment_hsk_clean_texts.py
+arch -x86_64 /usr/bin/python3 scripts/segment_hsk_clean_texts.py
 ```
 
 注意：当前 PyNLPIR 动态库只能在 x86_64 Python 下正常运行，所以分词脚本需要使用上面的 `arch -x86_64` 命令。
@@ -103,16 +107,16 @@ python -m unittest discover -s tests -v
 
 ```text
 4.14作文前筛.xlsx
-  -> sample_essays_by_score.py
+  -> scripts/sample_essays_by_score.py
   -> 作文样本主表.xlsx
-  -> fetch_hsk_ori_texts.py
+  -> scripts/fetch_hsk_ori_texts.py
   -> ori_text/
-  -> clean_hsk_ori_texts.py
+  -> scripts/clean_hsk_ori_texts.py
   -> clean_text/
-  -> segment_hsk_clean_texts.py
+  -> scripts/segment_hsk_clean_texts.py
        + outputs/新版HSK词汇大纲.csv
        + resources/语言特征词表.csv
-       + linguistic_features.py
+       + scripts/linguistic_features.py
   -> seg_text/
   -> outputs/作文词性统计宽表.xlsx
 ```

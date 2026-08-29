@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import unittest
 
-from linguistic_features import (
+from scripts.linguistic_features import (
     CompiledLexiconEntry,
     Token,
     compute_linguistic_features,
