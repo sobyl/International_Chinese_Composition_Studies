@@ -35,7 +35,7 @@ from linguistic_features import (
 DEFAULT_WORKBOOK = "作文样本主表.xlsx"
 DEFAULT_INPUT_DIR = "clean_text"
 DEFAULT_SEG_OUTPUT_DIR = "seg_text"
-DEFAULT_STATS_OUTPUT = "outputs/作文词性统计宽表.xlsx"
+DEFAULT_STATS_OUTPUT = "作文词性统计宽表.xlsx"
 DEFAULT_HSK_VOCAB = "outputs/新版HSK词汇大纲.csv"
 DEFAULT_FEATURE_LEXICON = "resources/语言特征词表.csv"
 DEFAULT_MATTR_WINDOW = 50

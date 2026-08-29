@@ -8,6 +8,7 @@
 .
 ├── 4.14作文前筛.xlsx
 ├── 作文样本主表.xlsx
+├── 作文词性统计宽表.xlsx
 ├── scripts/
 │   ├── __init__.py
 │   ├── sample_essays_by_score.py
@@ -43,7 +44,7 @@
 - `4.14作文前筛.xlsx`：原始筛选表，包含多个 sheet，是后续抽样的源数据。
 - `作文样本主表.xlsx`：当前主要迭代用表。四个 sheet 分别为 `J1`、`J2`、`Y1`、`Y2`，每个 sheet 155 篇。表内包含作文基本信息，并增加了 `作文文件名` 字段，例如 `J1_55_01`、`J1_60_02`。
 - `outputs/新版HSK词汇大纲.csv`：从新版 HSK 考试大纲提取的 11,000 条机器可读词汇，包含主等级、兼属等级、词语、拼音和词性等字段。
-- `outputs/作文词性统计宽表.xlsx`：基于 `clean_text` 生成的语言特征宽表。`词性统计` sheet 每行对应一篇作文，`字段说明` sheet 逐列记录定义、公式和分母。
+- `作文词性统计宽表.xlsx`：项目最终主分析表，基于 `clean_text` 全量生成。`词性统计` sheet 每行对应一篇作文，`字段说明` sheet 逐列记录定义、公式和分母；后续统计分析应优先使用此表。
 - `outputs/hsk_标注说明.md`：从 HSK 网站帮助页整理出的标注说明，用于理解和清洗原始标注文本。
 
 ### 文本目录
@@ -85,6 +86,8 @@ python scripts/clean_hsk_ori_texts.py
 arch -x86_64 /usr/bin/python3 scripts/segment_hsk_clean_texts.py
 ```
 
+该命令默认在项目根目录生成或更新最终主分析表 `作文词性统计宽表.xlsx`。
+
 注意：当前 PyNLPIR 动态库只能在 x86_64 Python 下正常运行，所以分词脚本需要使用上面的 `arch -x86_64` 命令。
 
 默认 HSK 词表为 `outputs/新版HSK词汇大纲.csv`，也可通过 `--hsk-vocab` 指定其他同结构 CSV。等级统计使用词表的 `主等级`：1-3 级合并为初等，4-6 级合并为中等，7-9 级为高等。每个等级的“词汇次数”按分词 token 出现次数统计，“词汇占比”的分母为该作文全部非标点分词数。
@@ -118,7 +121,7 @@ python -m unittest discover -s tests -v
        + resources/语言特征词表.csv
        + scripts/linguistic_features.py
   -> seg_text/
-  -> outputs/作文词性统计宽表.xlsx
+  -> 作文词性统计宽表.xlsx
 ```
 
-`作文样本主表.xlsx` 是后续分析的主索引；`clean_text` 是后续文本分析的正文来源；`seg_text` 和词性统计宽表是分词后的派生结果。
+`作文样本主表.xlsx` 是样本主索引；`clean_text` 是文本分析的正文来源；根目录的 `作文词性统计宽表.xlsx` 是项目最终主分析表，`seg_text` 是其可复核的分词中间结果。
