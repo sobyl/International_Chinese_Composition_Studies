@@ -106,7 +106,7 @@ POS_COLUMN_ORDER = [
 ]
 
 BASIC_HEADERS = ["篇名代码", "篇名", "作文编码", "国籍", "作文题目", "作文分数", "体裁", "作文文件名"]
-TEXT_STAT_HEADERS = ["字数", "纯文本字数", "分词数", "非标点分词数"]
+TEXT_STAT_HEADERS = ["字数", "纯文本字数", "分词数", "非标点分词数", "去重词数"]
 HSK_STAT_HEADERS = [
     header
     for level in HSK_LEVELS
@@ -144,6 +144,7 @@ class EssayStats:
     han_char_count: int
     token_count: int
     non_punct_token_count: int
+    unique_word_count: int
     pos_counts: Counter[str]
     hsk_level_counts: Counter[str]
 
@@ -367,10 +368,11 @@ def segment_lines(
     text: str,
     pynlpir: Any,
     hsk_vocabulary: dict[str, tuple[HskVocabularyEntry, ...]],
-) -> tuple[str, Counter[str], Counter[str], int]:
+) -> tuple[str, Counter[str], Counter[str], int, int]:
     output_lines: list[str] = []
     pos_counts: Counter[str] = Counter()
     hsk_level_counts: Counter[str] = Counter()
+    unique_words: set[str] = set()
     token_count = 0
 
     for line in text.splitlines():
@@ -386,13 +388,21 @@ def segment_lines(
             label = pos_label(pos)
             pos_counts[pos_column_name(pos)] += 1
             if (pos or "").strip() != PUNCT_POS:
+                if word_text:
+                    unique_words.add(word_text)
                 hsk_level = select_hsk_level(word_text, pos, hsk_vocabulary)
                 if hsk_level is not None:
                     hsk_level_counts[hsk_level] += 1
             tokens.append(f"{word_text}/{label}")
         output_lines.append(" ".join(tokens))
 
-    return "\n".join(output_lines).rstrip() + "\n", pos_counts, hsk_level_counts, token_count
+    return (
+        "\n".join(output_lines).rstrip() + "\n",
+        pos_counts,
+        hsk_level_counts,
+        token_count,
+        len(unique_words),
+    )
 
 
 def atomic_write_text(path: Path, text: str) -> None:
@@ -412,7 +422,7 @@ def segment_record(
 ) -> EssayStats:
     source_path = source_path_for(input_dir, record)
     text = source_path.read_text(encoding="utf-8")
-    segmented_text, pos_counts, hsk_level_counts, token_count = segment_lines(
+    segmented_text, pos_counts, hsk_level_counts, token_count, unique_word_count = segment_lines(
         text,
         pynlpir,
         hsk_vocabulary,
@@ -426,6 +436,7 @@ def segment_record(
         han_char_count=han_char_count,
         token_count=token_count,
         non_punct_token_count=non_punct_token_count,
+        unique_word_count=unique_word_count,
         pos_counts=pos_counts,
         hsk_level_counts=hsk_level_counts,
     )
@@ -469,6 +480,7 @@ def build_stats_rows(stats: list[EssayStats]) -> tuple[list[str], list[list[Any]
                 item.han_char_count,
                 item.token_count,
                 item.non_punct_token_count,
+                item.unique_word_count,
                 *[item.pos_counts.get(column, 0) for column in pos_columns],
                 *hsk_stat_values(item),
             ]
@@ -549,6 +561,11 @@ def validate_stats(stats: list[EssayStats]) -> None:
             raise ValueError(f"{item.record.filename} 分词数不等于词性计数总和：{item.token_count} != {summed}")
         if item.non_punct_token_count != item.token_count - punct_count:
             raise ValueError(f"{item.record.filename} 非标点分词数不等于分词数减标点数")
+        if not 0 <= item.unique_word_count <= item.non_punct_token_count:
+            raise ValueError(
+                f"{item.record.filename} 去重词数超出有效范围："
+                f"{item.unique_word_count} > {item.non_punct_token_count}"
+            )
         unknown_levels = set(item.hsk_level_counts).difference(HSK_LEVELS)
         if unknown_levels:
             raise ValueError(f"{item.record.filename} 存在无效 HSK 主等级：{sorted(unknown_levels)}")
@@ -599,7 +616,7 @@ def main() -> int:
             print(
                 f"[{index}/{len(records)}] {record.code}/{record.filename}: "
                 f"{item.token_count} tokens, {item.non_punct_token_count} non-punct, "
-                f"{hsk_count} HSK",
+                f"{item.unique_word_count} unique, {hsk_count} HSK",
                 flush=True,
             )
     finally:
