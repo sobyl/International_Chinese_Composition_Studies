@@ -12,17 +12,40 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any
 
+from linguistic_features import (
+    CATEGORY_COHESION,
+    CATEGORY_GRAMMAR,
+    CATEGORY_HSK,
+    CATEGORY_LEXICAL_DENSITY,
+    CATEGORY_LEXICAL_DIVERSITY,
+    CATEGORY_NARRATIVE,
+    CATEGORY_STRUCTURE,
+    CONNECTIVE_FEATURES,
+    CompiledLexiconEntry,
+    FieldSpec,
+    RAW_POS_PARENT,
+    Token,
+    compile_feature_lexicon,
+    compute_linguistic_features,
+    raw_pos_parent,
+    read_feature_lexicon,
+)
+
 
 DEFAULT_WORKBOOK = "作文样本主表.xlsx"
 DEFAULT_INPUT_DIR = "clean_text"
 DEFAULT_SEG_OUTPUT_DIR = "seg_text"
 DEFAULT_STATS_OUTPUT = "outputs/作文词性统计宽表.xlsx"
 DEFAULT_HSK_VOCAB = "outputs/新版HSK词汇大纲.csv"
+DEFAULT_FEATURE_LEXICON = "resources/语言特征词表.csv"
+DEFAULT_MATTR_WINDOW = 50
+DEFAULT_LONG_SENTENCE_THRESHOLD = 30
 SHEET_NAMES = ("J1", "J2", "Y1", "Y2")
 REQUIRED_COLUMNS = ("篇名代码", "篇名", "作文编码", "国籍", "作文题目", "作文分数", "体裁", "作文文件名")
 EXPECTED_TOTAL = 620
 EXPECTED_HSK_VOCAB_COUNT = 11000
 PUNCT_POS = "punctuation mark"
+PARENT_POS_TO_RAW_ROOT = {parent: root for root, parent in RAW_POS_PARENT.items()}
 HAN_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
 HSK_POS_RE = re.compile(r"前缀|后缀|拟声|数量|名|动|形|副|代|介|连|助|数|量|叹")
 
@@ -107,17 +130,6 @@ POS_COLUMN_ORDER = [
 
 BASIC_HEADERS = ["篇名代码", "篇名", "作文编码", "国籍", "作文题目", "作文分数", "体裁", "作文文件名"]
 TEXT_STAT_HEADERS = ["字数", "纯文本字数", "分词数", "非标点分词数", "去重词数"]
-HSK_STAT_HEADERS = [
-    header
-    for level in HSK_LEVELS
-    for header in (f"{level}级词汇次数", f"{level}级词汇占比")
-] + [
-    header
-    for group in HSK_LEVEL_GROUPS
-    for header in (f"{group}词汇次数", f"{group}词汇占比")
-]
-
-
 @dataclass(frozen=True)
 class EssayRecord:
     sheet_name: str
@@ -147,6 +159,8 @@ class EssayStats:
     unique_word_count: int
     pos_counts: Counter[str]
     hsk_level_counts: Counter[str]
+    feature_values: dict[str, int | float]
+    feature_fields: tuple[FieldSpec, ...]
 
 
 def parse_args() -> argparse.Namespace:
@@ -161,6 +175,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seg-output-dir", default=DEFAULT_SEG_OUTPUT_DIR, help=f"分词输出目录，默认：{DEFAULT_SEG_OUTPUT_DIR}")
     parser.add_argument("--stats-output", default=DEFAULT_STATS_OUTPUT, help=f"统计宽表输出，默认：{DEFAULT_STATS_OUTPUT}")
     parser.add_argument("--hsk-vocab", default=DEFAULT_HSK_VOCAB, help=f"HSK 词汇表 CSV，默认：{DEFAULT_HSK_VOCAB}")
+    parser.add_argument(
+        "--feature-lexicon",
+        default=DEFAULT_FEATURE_LEXICON,
+        help=f"语言特征词表 CSV，默认：{DEFAULT_FEATURE_LEXICON}",
+    )
+    parser.add_argument(
+        "--mattr-window",
+        type=int,
+        default=DEFAULT_MATTR_WINDOW,
+        help=f"MATTR 移动窗口长度，默认：{DEFAULT_MATTR_WINDOW}",
+    )
+    parser.add_argument(
+        "--long-sentence-threshold",
+        type=int,
+        default=DEFAULT_LONG_SENTENCE_THRESHOLD,
+        help=f"长句汉字数阈值（严格大于），默认：{DEFAULT_LONG_SENTENCE_THRESHOLD}",
+    )
     parser.add_argument("--limit", type=int, default=None, help="只处理前 N 篇，用于小样本测试")
     parser.add_argument("--dry-run", action="store_true", help="只校验主表和文本文件，不写输出")
     return parser.parse_args()
@@ -177,6 +208,10 @@ def require_x86_64() -> None:
 def validate_args(args: argparse.Namespace) -> None:
     if args.limit is not None and args.limit <= 0:
         raise ValueError("--limit 必须大于 0")
+    if args.mattr_window <= 0:
+        raise ValueError("--mattr-window 必须大于 0")
+    if args.long_sentence_threshold <= 0:
+        raise ValueError("--long-sentence-threshold 必须大于 0")
     if not str(args.stats_output).lower().endswith(".xlsx"):
         raise ValueError("--stats-output 必须是 .xlsx 文件")
 
@@ -368,31 +403,56 @@ def segment_lines(
     text: str,
     pynlpir: Any,
     hsk_vocabulary: dict[str, tuple[HskVocabularyEntry, ...]],
-) -> tuple[str, Counter[str], Counter[str], int, int]:
+) -> tuple[str, Counter[str], Counter[str], int, int, list[Token]]:
     output_lines: list[str] = []
     pos_counts: Counter[str] = Counter()
     hsk_level_counts: Counter[str] = Counter()
     unique_words: set[str] = set()
+    feature_tokens: list[Token] = []
     token_count = 0
+    paragraph_index = -1
 
     for line in text.splitlines():
         if not line.strip():
             output_lines.append("")
             continue
 
-        segmented = pynlpir.segment(line)
+        paragraph_index += 1
+        segmented = pynlpir.segment(line, pos_names=None)
+        parent_fallback: list[tuple[str, str | None]] | None = None
+        if any(not normalize_cell(raw_pos) for _, raw_pos in segmented):
+            parent_fallback = pynlpir.segment(line)
+            raw_words = [normalize_cell(word) for word, _ in segmented]
+            parent_words = [normalize_cell(word) for word, _ in parent_fallback]
+            if raw_words != parent_words:
+                raise ValueError("PyNLPIR原始词性与大类词性两次分词结果不一致，无法安全对齐")
         token_count += len(segmented)
         tokens: list[str] = []
-        for word, pos in segmented:
+        for token_index, (word, raw_pos) in enumerate(segmented):
             word_text = str(word).replace("\n", " ").strip()
-            label = pos_label(pos)
-            pos_counts[pos_column_name(pos)] += 1
-            if (pos or "").strip() != PUNCT_POS:
+            raw_pos_text = normalize_cell(raw_pos).lower()
+            parent_pos = raw_pos_parent(raw_pos_text)
+            if not parent_pos and parent_fallback is not None:
+                parent_pos = normalize_cell(parent_fallback[token_index][1])
+                raw_pos_text = PARENT_POS_TO_RAW_ROOT.get(parent_pos, raw_pos_text)
+            label = pos_label(parent_pos)
+            pos_counts[pos_column_name(parent_pos)] += 1
+            hsk_level: str | None = None
+            if parent_pos != PUNCT_POS:
                 if word_text:
                     unique_words.add(word_text)
-                hsk_level = select_hsk_level(word_text, pos, hsk_vocabulary)
+                hsk_level = select_hsk_level(word_text, parent_pos, hsk_vocabulary)
                 if hsk_level is not None:
                     hsk_level_counts[hsk_level] += 1
+            feature_tokens.append(
+                Token(
+                    word=word_text,
+                    raw_pos=raw_pos_text,
+                    parent_pos=parent_pos,
+                    paragraph_index=paragraph_index,
+                    hsk_level=hsk_level,
+                )
+            )
             tokens.append(f"{word_text}/{label}")
         output_lines.append(" ".join(tokens))
 
@@ -402,6 +462,7 @@ def segment_lines(
         hsk_level_counts,
         token_count,
         len(unique_words),
+        feature_tokens,
     )
 
 
@@ -419,16 +480,28 @@ def segment_record(
     seg_output_dir: Path,
     pynlpir: Any,
     hsk_vocabulary: dict[str, tuple[HskVocabularyEntry, ...]],
+    feature_lexicon: tuple[CompiledLexiconEntry, ...],
+    mattr_window: int,
+    long_sentence_threshold: int,
 ) -> EssayStats:
     source_path = source_path_for(input_dir, record)
     text = source_path.read_text(encoding="utf-8")
-    segmented_text, pos_counts, hsk_level_counts, token_count, unique_word_count = segment_lines(
+    segmented_text, pos_counts, hsk_level_counts, token_count, unique_word_count, feature_tokens = segment_lines(
         text,
         pynlpir,
         hsk_vocabulary,
     )
     char_count, han_char_count = count_chars(text)
     non_punct_token_count = token_count - pos_counts.get(POS_COLUMN_MAP[PUNCT_POS], 0)
+    feature_result = compute_linguistic_features(
+        text,
+        feature_tokens,
+        feature_lexicon,
+        mattr_window=mattr_window,
+        long_sentence_threshold=long_sentence_threshold,
+        hsk_levels=HSK_LEVELS,
+        hsk_groups=HSK_LEVEL_GROUPS,
+    )
     atomic_write_text(seg_path_for(seg_output_dir, record), segmented_text)
     return EssayStats(
         record=record,
@@ -439,54 +512,156 @@ def segment_record(
         unique_word_count=unique_word_count,
         pos_counts=pos_counts,
         hsk_level_counts=hsk_level_counts,
+        feature_values=feature_result.values,
+        feature_fields=feature_result.fields,
     )
 
 
-def hsk_stat_values(item: EssayStats) -> list[int | float]:
-    denominator = item.non_punct_token_count
-    values: list[int | float] = []
-    for level in HSK_LEVELS:
-        count = item.hsk_level_counts.get(level, 0)
-        values.extend((count, count / denominator if denominator else 0.0))
-    for levels in HSK_LEVEL_GROUPS.values():
-        count = sum(item.hsk_level_counts.get(level, 0) for level in levels)
-        values.extend((count, count / denominator if denominator else 0.0))
-    return values
+CATEGORY_BASIC = "基本信息"
+CATEGORY_LENGTH = "基础篇幅"
+CATEGORY_POS = "词性"
+FEATURE_CATEGORY_ORDER = (
+    CATEGORY_LEXICAL_DIVERSITY,
+    CATEGORY_LEXICAL_DENSITY,
+    CATEGORY_STRUCTURE,
+    CATEGORY_GRAMMAR,
+    CATEGORY_COHESION,
+    CATEGORY_NARRATIVE,
+    CATEGORY_HSK,
+)
 
 
-def build_stats_rows(stats: list[EssayStats]) -> tuple[list[str], list[list[Any]]]:
+def base_field_specs() -> tuple[FieldSpec, ...]:
+    basic_definitions = {
+        "篇名代码": "作文所属抽样代码（J1/J2/Y1/Y2）",
+        "篇名": "作文任务或篇名",
+        "作文编码": "HSK语料库中的作文唯一编码",
+        "国籍": "作者国籍",
+        "作文题目": "作文题目",
+        "作文分数": "作文原始评分",
+        "体裁": "作文体裁",
+        "作文文件名": "项目内用于关联文本文件的稳定名称",
+    }
+    fields = [
+        FieldSpec(
+            name=name,
+            category=CATEGORY_BASIC,
+            definition=basic_definitions[name],
+            formula="来自作文样本主表",
+            unit="文本" if name != "作文分数" else "分",
+            number_format="@" if name in {"作文编码", "作文文件名"} else "General",
+        )
+        for name in BASIC_HEADERS
+    ]
+    length_metadata = {
+        "字数": ("去掉空白后的字符总数，包含标点、数字和字母", "去除空白后按Unicode字符计数", "字符"),
+        "纯文本字数": ("仅中文汉字字符数量", "匹配Unicode汉字区间后计数", "汉字"),
+        "分词数": ("PyNLPIR返回的全部token数量，包含标点", "全部token直接计数", "token"),
+        "非标点分词数": ("排除PyNLPIR标点词性后的token数量", "分词数 - 标点数", "token"),
+        "去重词数": ("非标点token按词形去重后的数量", "非标点token词形集合大小", "词种"),
+    }
+    fields.extend(
+        FieldSpec(
+            name=name,
+            category=CATEGORY_LENGTH,
+            definition=length_metadata[name][0],
+            formula=length_metadata[name][1],
+            unit=length_metadata[name][2],
+            number_format="0",
+        )
+        for name in TEXT_STAT_HEADERS
+    )
+    return tuple(fields)
+
+
+def pos_rate_name(count_column: str) -> str:
+    return f"{count_column[:-1]}每千字" if count_column.endswith("数") else f"{count_column}每千字"
+
+
+def build_stats_rows(stats: list[EssayStats]) -> tuple[list[FieldSpec], list[list[Any]]]:
+    if not stats:
+        raise ValueError("没有可写入统计宽表的作文")
+
     observed_pos_columns = set()
     for item in stats:
         observed_pos_columns.update(item.pos_counts.keys())
 
     other_pos_columns = sorted(column for column in observed_pos_columns if column not in POS_COLUMN_ORDER)
-    pos_columns = [column for column in POS_COLUMN_ORDER if column in observed_pos_columns or column == "标点数"] + other_pos_columns
-    headers = BASIC_HEADERS + TEXT_STAT_HEADERS + pos_columns + HSK_STAT_HEADERS
+    pos_columns = list(POS_COLUMN_ORDER) + other_pos_columns
+
+    reference_feature_fields = stats[0].feature_fields
+    reference_feature_names = tuple(field.name for field in reference_feature_fields)
+    for item in stats[1:]:
+        if tuple(field.name for field in item.feature_fields) != reference_feature_names:
+            raise ValueError(f"{item.record.filename} 的语言特征字段与首篇不一致")
+
+    feature_fields_by_category: dict[str, list[FieldSpec]] = {category: [] for category in FEATURE_CATEGORY_ORDER}
+    for field in reference_feature_fields:
+        if field.category not in feature_fields_by_category:
+            raise ValueError(f"未知语言特征类别：{field.category}/{field.name}")
+        feature_fields_by_category[field.category].append(field)
+
+    fields = list(base_field_specs())
+    for category in (CATEGORY_LEXICAL_DIVERSITY, CATEGORY_LEXICAL_DENSITY, CATEGORY_STRUCTURE):
+        fields.extend(feature_fields_by_category[category])
+
+    for column in pos_columns:
+        label = column[:-1] if column.endswith("数") else column
+        fields.append(
+            FieldSpec(
+                name=column,
+                category=CATEGORY_POS,
+                definition=f"PyNLPIR大类词性为{label}的token数量",
+                formula="按PyNLPIR词性直接计数",
+                unit="次",
+                number_format="0",
+            )
+        )
+        fields.append(
+            FieldSpec(
+                name=pos_rate_name(column),
+                category=CATEGORY_POS,
+                definition=f"{label}token的每千汉字标准化频率",
+                formula=f"{column} ÷ 纯文本字数 × 1000",
+                unit="次/千汉字",
+                number_format="0.00",
+            )
+        )
+
+    for category in (CATEGORY_GRAMMAR, CATEGORY_COHESION, CATEGORY_NARRATIVE, CATEGORY_HSK):
+        fields.extend(feature_fields_by_category[category])
+
+    field_names = [field.name for field in fields]
+    duplicate_fields = [name for name, count in Counter(field_names).items() if count > 1]
+    if duplicate_fields:
+        raise ValueError(f"统计宽表字段名重复：{duplicate_fields}")
 
     rows: list[list[Any]] = []
     for item in stats:
         record = item.record
-        rows.append(
-            [
-                record.code,
-                record.title_code_name,
-                record.essay_id,
-                record.nationality,
-                record.essay_topic,
-                record.score,
-                record.genre,
-                record.filename,
-                item.char_count,
-                item.han_char_count,
-                item.token_count,
-                item.non_punct_token_count,
-                item.unique_word_count,
-                *[item.pos_counts.get(column, 0) for column in pos_columns],
-                *hsk_stat_values(item),
-            ]
-        )
+        values: dict[str, Any] = {
+            "篇名代码": record.code,
+            "篇名": record.title_code_name,
+            "作文编码": record.essay_id,
+            "国籍": record.nationality,
+            "作文题目": record.essay_topic,
+            "作文分数": record.score,
+            "体裁": record.genre,
+            "作文文件名": record.filename,
+            "字数": item.char_count,
+            "纯文本字数": item.han_char_count,
+            "分词数": item.token_count,
+            "非标点分词数": item.non_punct_token_count,
+            "去重词数": item.unique_word_count,
+            **item.feature_values,
+        }
+        for column in pos_columns:
+            count = item.pos_counts.get(column, 0)
+            values[column] = count
+            values[pos_rate_name(column)] = count * 1000 / item.han_char_count if item.han_char_count else 0.0
+        rows.append([values[field.name] for field in fields])
 
-    return headers, rows
+    return fields, rows
 
 
 def save_stats_workbook(
@@ -499,7 +674,8 @@ def save_stats_workbook(
     get_column_letter: Any,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    headers, rows = build_stats_rows(stats)
+    fields, rows = build_stats_rows(stats)
+    headers = [field.name for field in fields]
 
     workbook = Workbook()
     sheet = workbook.active
@@ -508,12 +684,24 @@ def save_stats_workbook(
     for row in rows:
         sheet.append(row)
 
-    header_fill = PatternFill("solid", fgColor="1F4E78")
+    category_colors = {
+        CATEGORY_BASIC: "1F4E78",
+        CATEGORY_LENGTH: "375623",
+        CATEGORY_LEXICAL_DIVERSITY: "8064A2",
+        CATEGORY_LEXICAL_DENSITY: "C65911",
+        CATEGORY_STRUCTURE: "BF9000",
+        CATEGORY_POS: "548235",
+        CATEGORY_GRAMMAR: "2F75B5",
+        CATEGORY_COHESION: "A64D79",
+        CATEGORY_NARRATIVE: "7F6000",
+        CATEGORY_HSK: "5B9BD5",
+    }
     header_font = Font(color="FFFFFF", bold=True)
-    for cell in sheet[1]:
-        cell.fill = header_fill
+    for cell, field in zip(sheet[1], fields):
+        cell.fill = PatternFill("solid", fgColor=category_colors[field.category])
         cell.font = header_font
-        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    sheet.row_dimensions[1].height = 42
 
     sheet.freeze_panes = "A2"
     sheet.auto_filter.ref = sheet.dimensions
@@ -531,21 +719,36 @@ def save_stats_workbook(
     for column, width in widths.items():
         sheet.column_dimensions[column].width = width
     for column_index in range(9, len(headers) + 1):
-        sheet.column_dimensions[get_column_letter(column_index)].width = 12
-    for column_index, header in enumerate(headers, start=1):
-        if header in HSK_STAT_HEADERS:
-            sheet.column_dimensions[get_column_letter(column_index)].width = 16
+        header_length = len(str(headers[column_index - 1]))
+        sheet.column_dimensions[get_column_letter(column_index)].width = min(max(header_length + 2, 12), 20)
 
-    percentage_columns = {
-        column_index
-        for column_index, header in enumerate(headers, start=1)
-        if header.endswith("词汇占比")
-    }
     for row in sheet.iter_rows(min_row=2):
-        for cell in row:
+        for cell, field in zip(row, fields):
             cell.alignment = Alignment(vertical="top")
-            if cell.column in percentage_columns:
-                cell.number_format = "0.00%"
+            cell.number_format = field.number_format
+
+    essay_id_column = headers.index("作文编码") + 1
+    for cell in sheet.iter_cols(min_col=essay_id_column, max_col=essay_id_column, min_row=2):
+        for item in cell:
+            item.number_format = "@"
+
+    dictionary = workbook.create_sheet("字段说明")
+    dictionary_headers = ["序号", "字段名", "类别", "定义", "公式", "单位/分母"]
+    dictionary.append(dictionary_headers)
+    for index, field in enumerate(fields, start=1):
+        dictionary.append([index, field.name, field.category, field.definition, field.formula, field.unit])
+    for cell in dictionary[1]:
+        cell.fill = PatternFill("solid", fgColor="404040")
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+    dictionary.freeze_panes = "A2"
+    dictionary.auto_filter.ref = dictionary.dimensions
+    dictionary_widths = (8, 28, 16, 52, 42, 18)
+    for index, width in enumerate(dictionary_widths, start=1):
+        dictionary.column_dimensions[get_column_letter(index)].width = width
+    for row in dictionary.iter_rows(min_row=2):
+        for cell in row:
+            cell.alignment = Alignment(vertical="top", wrap_text=True)
 
     with NamedTemporaryFile("wb", dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", delete=False) as tmp:
         tmp_path = Path(tmp.name)
@@ -576,6 +779,36 @@ def validate_stats(stats: list[EssayStats]) -> None:
                 f"{hsk_count} > {item.non_punct_token_count}"
             )
 
+        values = item.feature_values
+        if values["HSK词汇次数"] + values["非HSK词汇次数"] != item.non_punct_token_count:
+            raise ValueError(f"{item.record.filename} HSK与非HSK次数之和不等于非标点分词数")
+        if values["HSK词汇次数"] != hsk_count:
+            raise ValueError(f"{item.record.filename} HSK派生总数与原等级统计不一致")
+        for level in HSK_LEVELS:
+            if values[f"{level}级词汇次数"] != item.hsk_level_counts.get(level, 0):
+                raise ValueError(f"{item.record.filename} {level}级词汇次数回归不一致")
+            if values[f"{level}级词汇种类数"] > values[f"{level}级词汇次数"]:
+                raise ValueError(f"{item.record.filename} {level}级词汇种类数超过次数")
+        for group, levels in HSK_LEVEL_GROUPS.items():
+            expected = sum(item.hsk_level_counts.get(level, 0) for level in levels)
+            if values[f"{group}词汇次数"] != expected:
+                raise ValueError(f"{item.record.filename} {group}词汇次数不等于对应数字等级之和")
+            if values[f"{group}词汇种类数"] > values[f"{group}词汇次数"]:
+                raise ValueError(f"{item.record.filename} {group}词汇种类数超过次数")
+
+        connector_sum = sum(values[f"{feature}数"] for feature in CONNECTIVE_FEATURES)
+        if values["连接词总数"] != connector_sum:
+            raise ValueError(f"{item.record.filename} 连接词总数不等于八类连接标记之和")
+        non_hsk_partition_sum = sum(
+            values[f"非HSK{label}数"] for label in ("专名", "数字", "字母串", "其他")
+        )
+        if values["非HSK词汇次数"] != non_hsk_partition_sum:
+            raise ValueError(f"{item.record.filename} 非HSK四类之和不等于非HSK总数")
+        if values["词形丰富度TTR"] < 0 or values["词形丰富度TTR"] > 1:
+            raise ValueError(f"{item.record.filename} TTR超出0到1范围")
+        if values["仅出现一次词数"] > item.unique_word_count:
+            raise ValueError(f"{item.record.filename} 仅出现一次词数超过去重词数")
+
 
 def main() -> int:
     args = parse_args()
@@ -588,16 +821,20 @@ def main() -> int:
     seg_output_dir = Path(args.seg_output_dir)
     stats_output = Path(args.stats_output)
     hsk_vocab_path = Path(args.hsk_vocab)
+    feature_lexicon_path = Path(args.feature_lexicon)
 
     records = read_records(workbook_path, args.limit, load_workbook)
     validate_sources(records, input_dir)
     hsk_vocabulary = read_hsk_vocabulary(hsk_vocab_path)
+    feature_lexicon_specs = read_feature_lexicon(feature_lexicon_path)
 
     print(f"作文主表：{workbook_path}")
     print(f"清洗文本：{input_dir}")
     print(f"分词输出：{seg_output_dir}")
     print(f"统计宽表：{stats_output}")
     print(f"HSK 词汇表：{hsk_vocab_path}（{sum(len(entries) for entries in hsk_vocabulary.values())} 条）")
+    print(f"语言特征词表：{feature_lexicon_path}（{len(feature_lexicon_specs)} 条）")
+    print(f"MATTR窗口：{args.mattr_window}；长句阈值：>{args.long_sentence_threshold}字")
     print(f"本次处理：{len(records)} 篇")
 
     if args.dry_run:
@@ -609,8 +846,21 @@ def main() -> int:
     stats: list[EssayStats] = []
     pynlpir.open()
     try:
+        feature_lexicon = compile_feature_lexicon(
+            feature_lexicon_specs,
+            lambda term: pynlpir.segment(term, pos_names=None),
+        )
         for index, record in enumerate(records, start=1):
-            item = segment_record(record, input_dir, seg_output_dir, pynlpir, hsk_vocabulary)
+            item = segment_record(
+                record,
+                input_dir,
+                seg_output_dir,
+                pynlpir,
+                hsk_vocabulary,
+                feature_lexicon,
+                args.mattr_window,
+                args.long_sentence_threshold,
+            )
             stats.append(item)
             hsk_count = sum(item.hsk_level_counts.values())
             print(
