@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import platform
 import re
 import sys
@@ -16,11 +17,46 @@ DEFAULT_WORKBOOK = "作文样本主表.xlsx"
 DEFAULT_INPUT_DIR = "clean_text"
 DEFAULT_SEG_OUTPUT_DIR = "seg_text"
 DEFAULT_STATS_OUTPUT = "outputs/作文词性统计宽表.xlsx"
+DEFAULT_HSK_VOCAB = "outputs/新版HSK词汇大纲.csv"
 SHEET_NAMES = ("J1", "J2", "Y1", "Y2")
 REQUIRED_COLUMNS = ("篇名代码", "篇名", "作文编码", "国籍", "作文题目", "作文分数", "体裁", "作文文件名")
 EXPECTED_TOTAL = 620
+EXPECTED_HSK_VOCAB_COUNT = 11000
 PUNCT_POS = "punctuation mark"
 HAN_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
+HSK_POS_RE = re.compile(r"前缀|后缀|拟声|数量|名|动|形|副|代|介|连|助|数|量|叹")
+
+HSK_LEVELS = ("1", "2", "3", "4", "5", "6", "7-9")
+HSK_LEVEL_RANK = {level: index for index, level in enumerate(HSK_LEVELS)}
+HSK_LEVEL_GROUPS = {
+    "初等": ("1", "2", "3"),
+    "中等": ("4", "5", "6"),
+    "高等": ("7-9",),
+}
+HSK_REQUIRED_COLUMNS = ("词语", "主等级", "词性")
+
+PY_NLPIR_TO_HSK_POS = {
+    "noun": frozenset({"名"}),
+    "pronoun": frozenset({"代"}),
+    "verb": frozenset({"动"}),
+    "adjective": frozenset({"形"}),
+    "adverb": frozenset({"副"}),
+    "preposition": frozenset({"介"}),
+    "conjunction": frozenset({"连"}),
+    "particle": frozenset({"助"}),
+    "numeral": frozenset({"数", "数量"}),
+    "classifier": frozenset({"量", "数量"}),
+    "time word": frozenset({"名"}),
+    "noun of locality": frozenset({"名"}),
+    "locative word": frozenset({"名"}),
+    "suffix": frozenset({"后缀"}),
+    "prefix": frozenset({"前缀"}),
+    "modal particle": frozenset({"助"}),
+    "distinguishing word": frozenset({"形"}),
+    "status word": frozenset({"形"}),
+    "onomatopoeia": frozenset({"拟声"}),
+    "interjection": frozenset({"叹"}),
+}
 
 POS_COLUMN_MAP = {
     "noun": "名词数",
@@ -71,6 +107,15 @@ POS_COLUMN_ORDER = [
 
 BASIC_HEADERS = ["篇名代码", "篇名", "作文编码", "国籍", "作文题目", "作文分数", "体裁", "作文文件名"]
 TEXT_STAT_HEADERS = ["字数", "纯文本字数", "分词数", "非标点分词数"]
+HSK_STAT_HEADERS = [
+    header
+    for level in HSK_LEVELS
+    for header in (f"{level}级词汇次数", f"{level}级词汇占比")
+] + [
+    header
+    for group in HSK_LEVEL_GROUPS
+    for header in (f"{group}词汇次数", f"{group}词汇占比")
+]
 
 
 @dataclass(frozen=True)
@@ -86,6 +131,12 @@ class EssayRecord:
     filename: str
 
 
+@dataclass(frozen=True)
+class HskVocabularyEntry:
+    level: str
+    pos_categories: frozenset[str]
+
+
 @dataclass
 class EssayStats:
     record: EssayRecord
@@ -94,6 +145,7 @@ class EssayStats:
     token_count: int
     non_punct_token_count: int
     pos_counts: Counter[str]
+    hsk_level_counts: Counter[str]
 
 
 def parse_args() -> argparse.Namespace:
@@ -107,6 +159,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--input-dir", default=DEFAULT_INPUT_DIR, help=f"清洗文本目录，默认：{DEFAULT_INPUT_DIR}")
     parser.add_argument("--seg-output-dir", default=DEFAULT_SEG_OUTPUT_DIR, help=f"分词输出目录，默认：{DEFAULT_SEG_OUTPUT_DIR}")
     parser.add_argument("--stats-output", default=DEFAULT_STATS_OUTPUT, help=f"统计宽表输出，默认：{DEFAULT_STATS_OUTPUT}")
+    parser.add_argument("--hsk-vocab", default=DEFAULT_HSK_VOCAB, help=f"HSK 词汇表 CSV，默认：{DEFAULT_HSK_VOCAB}")
     parser.add_argument("--limit", type=int, default=None, help="只处理前 N 篇，用于小样本测试")
     parser.add_argument("--dry-run", action="store_true", help="只校验主表和文本文件，不写输出")
     return parser.parse_args()
@@ -156,6 +209,68 @@ def normalize_score(value: Any) -> int | str:
         return int(value)
     text = normalize_cell(value)
     return int(text) if text.isdigit() else text
+
+
+def read_hsk_vocabulary(path: Path) -> dict[str, tuple[HskVocabularyEntry, ...]]:
+    if not path.is_file():
+        raise FileNotFoundError(f"找不到 HSK 词汇表：{path}")
+
+    entries_by_word: dict[str, list[HskVocabularyEntry]] = {}
+    with path.open("r", encoding="utf-8-sig", newline="") as file:
+        reader = csv.DictReader(file)
+        headers = reader.fieldnames or []
+        missing_columns = [column for column in HSK_REQUIRED_COLUMNS if column not in headers]
+        if missing_columns:
+            raise ValueError(f"HSK 词汇表缺少必要列：{missing_columns}；实际表头：{headers}")
+
+        row_count = 0
+        for row_number, row in enumerate(reader, start=2):
+            row_count += 1
+            word = normalize_cell(row.get("词语"))
+            level = normalize_cell(row.get("主等级"))
+            raw_pos = normalize_cell(row.get("词性"))
+            if not word:
+                raise ValueError(f"HSK 词汇表第 {row_number} 行缺少词语")
+            if level not in HSK_LEVEL_RANK:
+                raise ValueError(f"HSK 词汇表第 {row_number} 行主等级无效：{level!r}")
+
+            entries_by_word.setdefault(word, []).append(
+                HskVocabularyEntry(
+                    level=level,
+                    pos_categories=frozenset(HSK_POS_RE.findall(raw_pos.replace(" ", ""))),
+                )
+            )
+
+    if row_count != EXPECTED_HSK_VOCAB_COUNT:
+        raise ValueError(
+            f"HSK 词汇表应有 {EXPECTED_HSK_VOCAB_COUNT} 条记录，实际读取 {row_count} 条"
+        )
+    return {word: tuple(entries) for word, entries in entries_by_word.items()}
+
+
+def select_hsk_level(
+    word: str,
+    pos: str | None,
+    vocabulary: dict[str, tuple[HskVocabularyEntry, ...]],
+) -> str | None:
+    entries = vocabulary.get(word)
+    if not entries:
+        return None
+
+    levels = {entry.level for entry in entries}
+    if len(levels) == 1:
+        return next(iter(levels))
+
+    target_pos = PY_NLPIR_TO_HSK_POS.get((pos or "").strip(), frozenset())
+    matched_levels = {
+        entry.level
+        for entry in entries
+        if target_pos and entry.pos_categories.intersection(target_pos)
+    }
+    if len(matched_levels) == 1:
+        return next(iter(matched_levels))
+
+    return min(levels, key=HSK_LEVEL_RANK.__getitem__)
 
 
 def read_records(workbook_path: Path, limit: int | None, load_workbook: Any) -> list[EssayRecord]:
@@ -248,9 +363,14 @@ def count_chars(text: str) -> tuple[int, int]:
     return len(no_space), len(HAN_RE.findall(no_space))
 
 
-def segment_lines(text: str, pynlpir: Any) -> tuple[str, Counter[str], int]:
+def segment_lines(
+    text: str,
+    pynlpir: Any,
+    hsk_vocabulary: dict[str, tuple[HskVocabularyEntry, ...]],
+) -> tuple[str, Counter[str], Counter[str], int]:
     output_lines: list[str] = []
     pos_counts: Counter[str] = Counter()
+    hsk_level_counts: Counter[str] = Counter()
     token_count = 0
 
     for line in text.splitlines():
@@ -265,10 +385,14 @@ def segment_lines(text: str, pynlpir: Any) -> tuple[str, Counter[str], int]:
             word_text = str(word).replace("\n", " ").strip()
             label = pos_label(pos)
             pos_counts[pos_column_name(pos)] += 1
+            if (pos or "").strip() != PUNCT_POS:
+                hsk_level = select_hsk_level(word_text, pos, hsk_vocabulary)
+                if hsk_level is not None:
+                    hsk_level_counts[hsk_level] += 1
             tokens.append(f"{word_text}/{label}")
         output_lines.append(" ".join(tokens))
 
-    return "\n".join(output_lines).rstrip() + "\n", pos_counts, token_count
+    return "\n".join(output_lines).rstrip() + "\n", pos_counts, hsk_level_counts, token_count
 
 
 def atomic_write_text(path: Path, text: str) -> None:
@@ -279,10 +403,20 @@ def atomic_write_text(path: Path, text: str) -> None:
     tmp_path.replace(path)
 
 
-def segment_record(record: EssayRecord, input_dir: Path, seg_output_dir: Path, pynlpir: Any) -> EssayStats:
+def segment_record(
+    record: EssayRecord,
+    input_dir: Path,
+    seg_output_dir: Path,
+    pynlpir: Any,
+    hsk_vocabulary: dict[str, tuple[HskVocabularyEntry, ...]],
+) -> EssayStats:
     source_path = source_path_for(input_dir, record)
     text = source_path.read_text(encoding="utf-8")
-    segmented_text, pos_counts, token_count = segment_lines(text, pynlpir)
+    segmented_text, pos_counts, hsk_level_counts, token_count = segment_lines(
+        text,
+        pynlpir,
+        hsk_vocabulary,
+    )
     char_count, han_char_count = count_chars(text)
     non_punct_token_count = token_count - pos_counts.get(POS_COLUMN_MAP[PUNCT_POS], 0)
     atomic_write_text(seg_path_for(seg_output_dir, record), segmented_text)
@@ -293,7 +427,20 @@ def segment_record(record: EssayRecord, input_dir: Path, seg_output_dir: Path, p
         token_count=token_count,
         non_punct_token_count=non_punct_token_count,
         pos_counts=pos_counts,
+        hsk_level_counts=hsk_level_counts,
     )
+
+
+def hsk_stat_values(item: EssayStats) -> list[int | float]:
+    denominator = item.non_punct_token_count
+    values: list[int | float] = []
+    for level in HSK_LEVELS:
+        count = item.hsk_level_counts.get(level, 0)
+        values.extend((count, count / denominator if denominator else 0.0))
+    for levels in HSK_LEVEL_GROUPS.values():
+        count = sum(item.hsk_level_counts.get(level, 0) for level in levels)
+        values.extend((count, count / denominator if denominator else 0.0))
+    return values
 
 
 def build_stats_rows(stats: list[EssayStats]) -> tuple[list[str], list[list[Any]]]:
@@ -303,7 +450,7 @@ def build_stats_rows(stats: list[EssayStats]) -> tuple[list[str], list[list[Any]
 
     other_pos_columns = sorted(column for column in observed_pos_columns if column not in POS_COLUMN_ORDER)
     pos_columns = [column for column in POS_COLUMN_ORDER if column in observed_pos_columns or column == "标点数"] + other_pos_columns
-    headers = BASIC_HEADERS + TEXT_STAT_HEADERS + pos_columns
+    headers = BASIC_HEADERS + TEXT_STAT_HEADERS + pos_columns + HSK_STAT_HEADERS
 
     rows: list[list[Any]] = []
     for item in stats:
@@ -323,6 +470,7 @@ def build_stats_rows(stats: list[EssayStats]) -> tuple[list[str], list[list[Any]
                 item.token_count,
                 item.non_punct_token_count,
                 *[item.pos_counts.get(column, 0) for column in pos_columns],
+                *hsk_stat_values(item),
             ]
         )
 
@@ -372,10 +520,20 @@ def save_stats_workbook(
         sheet.column_dimensions[column].width = width
     for column_index in range(9, len(headers) + 1):
         sheet.column_dimensions[get_column_letter(column_index)].width = 12
+    for column_index, header in enumerate(headers, start=1):
+        if header in HSK_STAT_HEADERS:
+            sheet.column_dimensions[get_column_letter(column_index)].width = 16
 
+    percentage_columns = {
+        column_index
+        for column_index, header in enumerate(headers, start=1)
+        if header.endswith("词汇占比")
+    }
     for row in sheet.iter_rows(min_row=2):
         for cell in row:
             cell.alignment = Alignment(vertical="top")
+            if cell.column in percentage_columns:
+                cell.number_format = "0.00%"
 
     with NamedTemporaryFile("wb", dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", delete=False) as tmp:
         tmp_path = Path(tmp.name)
@@ -391,6 +549,15 @@ def validate_stats(stats: list[EssayStats]) -> None:
             raise ValueError(f"{item.record.filename} 分词数不等于词性计数总和：{item.token_count} != {summed}")
         if item.non_punct_token_count != item.token_count - punct_count:
             raise ValueError(f"{item.record.filename} 非标点分词数不等于分词数减标点数")
+        unknown_levels = set(item.hsk_level_counts).difference(HSK_LEVELS)
+        if unknown_levels:
+            raise ValueError(f"{item.record.filename} 存在无效 HSK 主等级：{sorted(unknown_levels)}")
+        hsk_count = sum(item.hsk_level_counts.values())
+        if hsk_count > item.non_punct_token_count:
+            raise ValueError(
+                f"{item.record.filename} HSK 等级词汇次数超过非标点分词数："
+                f"{hsk_count} > {item.non_punct_token_count}"
+            )
 
 
 def main() -> int:
@@ -403,14 +570,17 @@ def main() -> int:
     input_dir = Path(args.input_dir)
     seg_output_dir = Path(args.seg_output_dir)
     stats_output = Path(args.stats_output)
+    hsk_vocab_path = Path(args.hsk_vocab)
 
     records = read_records(workbook_path, args.limit, load_workbook)
     validate_sources(records, input_dir)
+    hsk_vocabulary = read_hsk_vocabulary(hsk_vocab_path)
 
     print(f"作文主表：{workbook_path}")
     print(f"清洗文本：{input_dir}")
     print(f"分词输出：{seg_output_dir}")
     print(f"统计宽表：{stats_output}")
+    print(f"HSK 词汇表：{hsk_vocab_path}（{sum(len(entries) for entries in hsk_vocabulary.values())} 条）")
     print(f"本次处理：{len(records)} 篇")
 
     if args.dry_run:
@@ -423,11 +593,13 @@ def main() -> int:
     pynlpir.open()
     try:
         for index, record in enumerate(records, start=1):
-            item = segment_record(record, input_dir, seg_output_dir, pynlpir)
+            item = segment_record(record, input_dir, seg_output_dir, pynlpir, hsk_vocabulary)
             stats.append(item)
+            hsk_count = sum(item.hsk_level_counts.values())
             print(
                 f"[{index}/{len(records)}] {record.code}/{record.filename}: "
-                f"{item.token_count} tokens, {item.non_punct_token_count} non-punct",
+                f"{item.token_count} tokens, {item.non_punct_token_count} non-punct, "
+                f"{hsk_count} HSK",
                 flush=True,
             )
     finally:
