@@ -4,3 +4,5 @@ __pycache__/
 .codex_tmp/
 ~$*.xlsx
 outputs/~$*.xlsx
+outputs/mfmd_analysis/workbook_previews/
+outputs/mfmd_analysis/*.inspect.ndjson

@@ -1,0 +1,393 @@
+{
+  "input_workbook": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/作文词性统计宽表.xlsx",
+  "clean_text_dir": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/clean_text",
+  "output_dir": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/outputs/mfmd_analysis",
+  "seed": 20260829,
+  "validation": {
+    "rows": 620,
+    "columns": 301,
+    "code_counts": {
+      "J1": 155,
+      "J2": 155,
+      "Y1": 155,
+      "Y2": 155
+    },
+    "scores": [
+      55,
+      60,
+      65,
+      70,
+      80,
+      85,
+      90,
+      95
+    ],
+    "score_counts_per_code": {
+      "55": 1,
+      "60": 4,
+      "65": 24,
+      "70": 48,
+      "80": 44,
+      "85": 18,
+      "90": 12,
+      "95": 4
+    },
+    "missing_values": 0,
+    "mapped_clean_texts": 620
+  },
+  "screening": {
+    "initial_candidates": 146,
+    "after_variance_sparsity": 141,
+    "after_correlation": 115,
+    "after_msa": 93,
+    "overall_kmo": 0.7526169697599674,
+    "minimum_msa": 0.5201126381491228,
+    "msa_removed": [
+      "其他词性_空每千字",
+      "介词每千字",
+      "指示代词每千字",
+      "并列连接词每千字",
+      "方位词每千字",
+      "结构助词地每千字",
+      "数词每千字",
+      "第一人称复数代词每千字",
+      "3级词汇占比",
+      "3级词汇种类每千字",
+      "6级词汇内部TTR",
+      "第二人称代词每千字",
+      "非HSK数字每千字",
+      "语气词呢每千字",
+      "助词每千字",
+      "介词把每千字",
+      "连接词去重每千字",
+      "形容词每千字",
+      "形容词去重词每千字",
+      "直接引语每千字",
+      "4级词汇种类每千字",
+      "介词给每千字"
+    ]
+  },
+  "parallel_analysis": {
+    "iterations": 1000,
+    "suggested_factor_count": 14
+  },
+  "selected_model": {
+    "factor_count": 5,
+    "feature_count": 39,
+    "kmo": 0.7522068351254863,
+    "bartlett_chi2": 42313.47642369922,
+    "bartlett_df": 741,
+    "bartlett_p": 0.0,
+    "n_per_variable": 15.897435897435898,
+    "cumulative_variance": 0.573389404869613,
+    "stability_medians": [
+      0.9967959939649509,
+      0.9950544835140598,
+      0.9936216778428677,
+      0.9929824581177445,
+      0.9917457431502061
+    ],
+    "stability_q05": [
+      0.9935132467109865,
+      0.9847943995803259,
+      0.9812193986298314,
+      0.9848731046516722,
+      0.9819398853410618
+    ],
+    "bootstrap_successes": 200,
+    "selection_note": "选取通过诊断与Bootstrap稳定性检验的最高维度解",
+    "dimension_labels": [
+      "词汇丰富度与词汇扩展",
+      "基础词汇与叙事推进",
+      "人称指涉与信息密度",
+      "句法延展与分句复杂度",
+      "动作过程与动词链"
+    ],
+    "dimension_details": [
+      {
+        "维度序号": 1,
+        "维度名称": "词汇丰富度与词汇扩展",
+        "正向主要指标": [
+          {
+            "字段名": "词形丰富度TTR",
+            "载荷": 0.9740146206946739
+          },
+          {
+            "字段名": "仅出现一次词占比",
+            "载荷": 0.8433180887542207
+          },
+          {
+            "字段名": "MATTR-50",
+            "载荷": 0.7969805061064226
+          },
+          {
+            "字段名": "动词TTR",
+            "载荷": 0.726755533203214
+          },
+          {
+            "字段名": "名词TTR",
+            "载荷": 0.7206646966154211
+          },
+          {
+            "字段名": "动词去重词每千字",
+            "载荷": 0.7131834415905083
+          }
+        ],
+        "负向主要指标": [
+          {
+            "字段名": "结构助词的每千字",
+            "载荷": -0.36553421669303005
+          },
+          {
+            "字段名": "1级词汇占比",
+            "载荷": -0.35728570776326357
+          }
+        ]
+      },
+      {
+        "维度序号": 2,
+        "维度名称": "基础词汇与叙事推进",
+        "正向主要指标": [
+          {
+            "字段名": "趋向动词每千字",
+            "载荷": 0.6605463134924936
+          },
+          {
+            "字段名": "1级词汇种类每千字",
+            "载荷": 0.603971596599495
+          },
+          {
+            "字段名": "2级词汇种类每千字",
+            "载荷": 0.5943202402032326
+          },
+          {
+            "字段名": "2级词汇占比",
+            "载荷": 0.5921474294690957
+          },
+          {
+            "字段名": "1级词汇占比",
+            "载荷": 0.5449497309916045
+          },
+          {
+            "字段名": "非HSK专名每千字",
+            "载荷": 0.5284238186577976
+          }
+        ],
+        "负向主要指标": [
+          {
+            "字段名": "中等词汇占比",
+            "载荷": -0.9133729585656012
+          },
+          {
+            "字段名": "4级词汇占比",
+            "载荷": -0.7302421456132824
+          },
+          {
+            "字段名": "5级词汇占比",
+            "载荷": -0.6866546321798133
+          },
+          {
+            "字段名": "结构助词的每千字",
+            "载荷": -0.4708746330314853
+          },
+          {
+            "字段名": "高等词汇占比",
+            "载荷": -0.45968657073323693
+          },
+          {
+            "字段名": "6级词汇占比",
+            "载荷": -0.45672384614897515
+          }
+        ]
+      },
+      {
+        "维度序号": 3,
+        "维度名称": "人称指涉与信息密度",
+        "正向主要指标": [
+          {
+            "字段名": "代词每千字",
+            "载荷": 0.6988135958655414
+          },
+          {
+            "字段名": "非HSK词汇TTR",
+            "载荷": 0.6248765110114388
+          },
+          {
+            "字段名": "第三人称代词每千字",
+            "载荷": 0.5882516841885597
+          },
+          {
+            "字段名": "第一人称单数代词每千字",
+            "载荷": 0.5690609489353591
+          },
+          {
+            "字段名": "动词TTR",
+            "载荷": 0.48324251304662363
+          },
+          {
+            "字段名": "1级词汇占比",
+            "载荷": 0.47835029064292117
+          }
+        ],
+        "负向主要指标": [
+          {
+            "字段名": "非HSK词汇占比",
+            "载荷": -0.7435534484045808
+          },
+          {
+            "字段名": "平均词长",
+            "载荷": -0.5163295704631852
+          },
+          {
+            "字段名": "词汇密度",
+            "载荷": -0.4806682607490801
+          },
+          {
+            "字段名": "非HSK专名每千字",
+            "载荷": -0.37579539514152444
+          }
+        ]
+      },
+      {
+        "维度序号": 4,
+        "维度名称": "句法延展与分句复杂度",
+        "正向主要指标": [
+          {
+            "字段名": "平均每句分句数",
+            "载荷": 0.9713611335000217
+          },
+          {
+            "字段名": "平均句长_字",
+            "载荷": 0.8536235767224923
+          },
+          {
+            "字段名": "句长标准差_字",
+            "载荷": 0.7293515208006405
+          },
+          {
+            "字段名": "超过30字长句每千字",
+            "载荷": 0.5832628882833294
+          },
+          {
+            "字段名": "逗号每千字",
+            "载荷": 0.5126330198531819
+          }
+        ],
+        "负向主要指标": []
+      },
+      {
+        "维度序号": 5,
+        "维度名称": "动作过程与动词链",
+        "正向主要指标": [
+          {
+            "字段名": "动词每千字",
+            "载荷": 0.9518072851627851
+          },
+          {
+            "字段名": "连续动词结构每千字",
+            "载荷": 0.7637788652372841
+          },
+          {
+            "字段名": "情态动词每千字",
+            "载荷": 0.5651033636564697
+          },
+          {
+            "字段名": "动词去重词每千字",
+            "载荷": 0.5096008860801158
+          }
+        ],
+        "负向主要指标": [
+          {
+            "字段名": "非HSK专名每千字",
+            "载荷": -0.36437831752766864
+          }
+        ]
+      }
+    ]
+  },
+  "thresholds": {
+    "zero": 0.95,
+    "correlation": 0.85,
+    "msa": 0.5,
+    "communality": 0.3,
+    "loading": 0.3
+  },
+  "tables": {
+    "样本概况": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/outputs/mfmd_analysis/tables/样本概况.csv",
+    "分数分布": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/outputs/mfmd_analysis/tables/分数分布.csv",
+    "国籍分布": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/outputs/mfmd_analysis/tables/国籍分布.csv",
+    "变量筛选": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/outputs/mfmd_analysis/tables/变量筛选.csv",
+    "平行分析": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/outputs/mfmd_analysis/tables/平行分析.csv",
+    "候选模型诊断": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/outputs/mfmd_analysis/tables/候选模型诊断.csv",
+    "因子稳定性": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/outputs/mfmd_analysis/tables/因子稳定性.csv",
+    "因子载荷": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/outputs/mfmd_analysis/tables/因子载荷.csv",
+    "指标维度归属": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/outputs/mfmd_analysis/tables/指标维度归属.csv",
+    "维度相关": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/outputs/mfmd_analysis/tables/维度相关.csv",
+    "维度得分": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/outputs/mfmd_analysis/tables/维度得分.csv",
+    "得分敏感性": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/outputs/mfmd_analysis/tables/得分敏感性.csv",
+    "维度描述统计": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/outputs/mfmd_analysis/tables/维度描述统计.csv",
+    "Welch检验": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/outputs/mfmd_analysis/tables/Welch检验.csv",
+    "两两比较": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/outputs/mfmd_analysis/tables/两两比较.csv",
+    "分数相关": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/outputs/mfmd_analysis/tables/分数相关.csv",
+    "稳健回归": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/outputs/mfmd_analysis/tables/稳健回归.csv",
+    "匿名文本例证": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/outputs/mfmd_analysis/tables/匿名文本例证.csv",
+    "图表索引": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/outputs/mfmd_analysis/tables/图表索引.csv"
+  },
+  "figures": [
+    {
+      "序号": 1,
+      "图名": "样本与分数结构",
+      "文件": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/outputs/mfmd_analysis/figures/01_样本与分数结构.png"
+    },
+    {
+      "序号": 2,
+      "图名": "变量筛选流程",
+      "文件": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/outputs/mfmd_analysis/figures/02_变量筛选流程.png"
+    },
+    {
+      "序号": 3,
+      "图名": "平行分析与碎石图",
+      "文件": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/outputs/mfmd_analysis/figures/03_平行分析与碎石图.png"
+    },
+    {
+      "序号": 4,
+      "图名": "因子载荷热图",
+      "文件": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/outputs/mfmd_analysis/figures/04_因子载荷热图.png"
+    },
+    {
+      "序号": 5,
+      "图名": "四组维度得分分布",
+      "文件": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/outputs/mfmd_analysis/figures/05_四组维度得分分布.png"
+    },
+    {
+      "序号": 6,
+      "图名": "四组多维画像热图",
+      "文件": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/outputs/mfmd_analysis/figures/06_四组多维画像热图.png"
+    },
+    {
+      "序号": 7,
+      "图名": "分数与维度得分趋势",
+      "文件": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/outputs/mfmd_analysis/figures/07_分数与维度得分趋势.png"
+    },
+    {
+      "序号": 8,
+      "图名": "HSK等级构成",
+      "文件": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/outputs/mfmd_analysis/figures/08_HSK等级构成.png"
+    },
+    {
+      "序号": 9,
+      "图名": "组间效应量森林图",
+      "文件": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/outputs/mfmd_analysis/figures/09_组间效应量森林图.png"
+    },
+    {
+      "序号": 10,
+      "图名": "回归系数森林图",
+      "文件": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/outputs/mfmd_analysis/figures/10_回归系数森林图.png"
+    },
+    {
+      "序号": 11,
+      "图名": "维度相关热图",
+      "文件": "/Users/bilibili/Desktop/project/International_Chinese_Composition_Studies/outputs/mfmd_analysis/figures/11_维度相关热图.png"
+    }
+  ]
+}
