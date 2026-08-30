@@ -11,6 +11,8 @@
 ├── 作文词性统计宽表.xlsx
 ├── 作文语言特征多维分析报告.docx
 ├── 作文语言特征多维分析报告.pdf
+├── 作文语言特征与母语参照综合分析报告.docx
+├── 作文语言特征与母语参照综合分析报告.pdf
 ├── 母语作文样本主表.xlsx
 ├── 母语作文词性统计宽表.xlsx
 ├── 作文语言特征母语对照分析报告.docx
@@ -85,6 +87,7 @@
 - `outputs/新版HSK词汇大纲.csv`：从新版 HSK 考试大纲提取的 11,000 条机器可读词汇，包含主等级、兼属等级、词语、拼音和词性等字段。
 - `作文词性统计宽表.xlsx`：项目最终主分析表，基于 `clean_text` 全量生成。`词性统计` sheet 每行对应一篇作文，`字段说明` sheet 逐列记录定义、公式和分母；后续统计分析应优先使用此表。
 - `作文语言特征多维分析报告.docx`、`作文语言特征多维分析报告.pdf`：基于620篇作文和301列主宽表生成的29页中文MF/MD学术分析报告，包含11幅统计图、五维解释、四组比较、分数关系、补充国籍分析及匿名文本例证。
+- `作文语言特征与母语参照综合分析报告.docx`、`作文语言特征与母语参照综合分析报告.pdf`：把620篇学习者作文MF/MD分析、180篇公开网络母语参照分析和母语样本审计摘要组织为同一研究链条的综合报告；保留原两份独立报告不变，不在报告中复制180行URL或网页全文。
 - `outputs/mfmd_analysis/作文多维分析结果.xlsx`：MF/MD分析的可审查结果工作簿，共20个sheet，保存变量筛选、候选模型诊断、因子载荷、维度得分、组间检验、稳健回归、文本例证和图表索引。
 - `outputs/mfmd_analysis/tables/`、`outputs/mfmd_analysis/figures/`：分析脚本生成的逐表CSV和11幅300 DPI图片；`analysis_metadata.json`保存随机种子、诊断和最终模型元数据。
 - `outputs/hsk_标注说明.md`：从 HSK 网站帮助页整理出的标注说明，用于理解和清洗原始标注文本。
@@ -120,6 +123,7 @@
 - `scripts/analyze_native_control.py`：固定使用620篇学习者作文的39项指标投影参数和五维结构，执行母语对照、HC3回归、篇幅匹配重抽样、主题/年份敏感性和联合EFA。
 - `scripts/build_native_control_analysis_workbook.mjs`：生成多sheet母语对照分析结果工作簿。
 - `scripts/build_native_control_report.py`：根据正式统计表和300 DPI图片生成母语对照DOCX报告；PDF由最终DOCX统一导出。
+- `scripts/build_integrated_composition_report.py`：读取两阶段正式分析结果、两份301列宽表和母语样本主表，生成学习者内部分析与母语参照比较相统一的综合DOCX报告，不重新抽样或重估因子模型。
 - `requirements-analysis.txt`：MF/MD分析与报告的固定版本Python依赖。
 - `resources/语言特征词表.csv`：可人工审查的语言特征词表，字段为 `大类、特征名、词项、允许词性前缀、来源说明`。
 - `tests/test_linguistic_features.py`：纯函数单元测试，覆盖 MATTR、句段切分、词表最长匹配、连续动词和 HSK 派生统计等口径。
@@ -200,6 +204,14 @@ python scripts/analyze_native_control.py
 node scripts/build_native_control_analysis_workbook.mjs
 python scripts/build_native_control_report.py
 ```
+
+生成学习者与母语参照综合报告：
+
+```bash
+python scripts/build_integrated_composition_report.py
+```
+
+该脚本默认在项目根目录生成 `作文语言特征与母语参照综合分析报告.docx`；最终PDF应由完成逐页渲染检查后的DOCX统一导出。
 
 母语对照主分析沿用当前39项指标形成的五维结构，以学习者样本均值、标准差和载荷方向固定投影；联合因子分析仅作为结构敏感性检验。母语样本没有作文分数，因此不进行母语与学习者的分数比较。当前800篇联合分析中，只有2因子方案通过预设诊断和稳定性门槛，不能视为对原五维结构的完整复现。
 
