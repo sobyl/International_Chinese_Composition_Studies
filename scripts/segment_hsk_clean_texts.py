@@ -12,24 +12,44 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any
 
-from linguistic_features import (
-    CATEGORY_COHESION,
-    CATEGORY_GRAMMAR,
-    CATEGORY_HSK,
-    CATEGORY_LEXICAL_DENSITY,
-    CATEGORY_LEXICAL_DIVERSITY,
-    CATEGORY_NARRATIVE,
-    CATEGORY_STRUCTURE,
-    CONNECTIVE_FEATURES,
-    CompiledLexiconEntry,
-    FieldSpec,
-    RAW_POS_PARENT,
-    Token,
-    compile_feature_lexicon,
-    compute_linguistic_features,
-    raw_pos_parent,
-    read_feature_lexicon,
-)
+try:
+    from .linguistic_features import (
+        CATEGORY_COHESION,
+        CATEGORY_GRAMMAR,
+        CATEGORY_HSK,
+        CATEGORY_LEXICAL_DENSITY,
+        CATEGORY_LEXICAL_DIVERSITY,
+        CATEGORY_NARRATIVE,
+        CATEGORY_STRUCTURE,
+        CONNECTIVE_FEATURES,
+        CompiledLexiconEntry,
+        FieldSpec,
+        RAW_POS_PARENT,
+        Token,
+        compile_feature_lexicon,
+        compute_linguistic_features,
+        raw_pos_parent,
+        read_feature_lexicon,
+    )
+except ImportError:
+    from linguistic_features import (
+        CATEGORY_COHESION,
+        CATEGORY_GRAMMAR,
+        CATEGORY_HSK,
+        CATEGORY_LEXICAL_DENSITY,
+        CATEGORY_LEXICAL_DIVERSITY,
+        CATEGORY_NARRATIVE,
+        CATEGORY_STRUCTURE,
+        CONNECTIVE_FEATURES,
+        CompiledLexiconEntry,
+        FieldSpec,
+        RAW_POS_PARENT,
+        Token,
+        compile_feature_lexicon,
+        compute_linguistic_features,
+        raw_pos_parent,
+        read_feature_lexicon,
+    )
 
 
 DEFAULT_WORKBOOK = "作文样本主表.xlsx"

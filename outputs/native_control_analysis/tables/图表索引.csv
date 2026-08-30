@@ -1,0 +1,11 @@
+﻿序号,图名,文件
+1,采样主题层级,outputs/native_control_analysis/figures/01_采样主题层级.png
+2,篇幅匹配诊断,outputs/native_control_analysis/figures/02_篇幅匹配诊断.png
+3,五维画像热图,outputs/native_control_analysis/figures/03_五维画像热图.png
+4,五维得分分布,outputs/native_control_analysis/figures/04_五维得分分布.png
+5,五维效应量森林图,outputs/native_control_analysis/figures/05_五维效应量森林图.png
+6,主要语言特征效应量,outputs/native_control_analysis/figures/06_主要语言特征效应量.png
+7,HSK词汇构成,outputs/native_control_analysis/figures/07_HSK词汇构成.png
+8,篇幅匹配重抽样,outputs/native_control_analysis/figures/08_篇幅匹配重抽样.png
+9,发布年份分布,outputs/native_control_analysis/figures/09_发布年份分布.png
+10,联合模型Tucker一致性,outputs/native_control_analysis/figures/10_联合模型Tucker一致性.png

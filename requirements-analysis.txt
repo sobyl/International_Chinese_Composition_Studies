@@ -1,3 +1,4 @@
+# Python >= 3.10；本项目当前使用 Python 3.12 运行分析与报告。
 numpy==2.2.6
 pandas==2.2.3
 openpyxl==3.1.5

@@ -1,0 +1,109 @@
+{
+  "NJ1": {
+    "selected": 45,
+    "learner_code": "J1",
+    "grade_counts": {
+      "高一": 15,
+      "高三": 15,
+      "高二": 15
+    },
+    "stage_counts": {
+      "高中": 45
+    },
+    "tier_counts": {
+      "扩展": 36,
+      "近似": 5,
+      "精确": 4
+    },
+    "year_range": [
+      2009,
+      2017
+    ],
+    "native_han_mean": 508.55555555555554,
+    "native_han_median": 521,
+    "learner_han_mean": 390.5032258064516,
+    "learner_han_median": 391,
+    "length_smd": 1.1842387853446146
+  },
+  "NJ2": {
+    "selected": 45,
+    "learner_code": "J2",
+    "grade_counts": {
+      "高一": 12,
+      "未标注": 14,
+      "高三": 12,
+      "高二": 7
+    },
+    "stage_counts": {
+      "高中": 45
+    },
+    "tier_counts": {
+      "宽泛": 34,
+      "近似": 4,
+      "精确": 4,
+      "扩展": 3
+    },
+    "year_range": [
+      2009,
+      2020
+    ],
+    "native_han_mean": 579.4444444444445,
+    "native_han_median": 602,
+    "learner_han_mean": 376.6516129032258,
+    "learner_han_median": 382,
+    "length_smd": 1.8649844451486426
+  },
+  "NY1": {
+    "selected": 45,
+    "learner_code": "Y1",
+    "grade_counts": {
+      "高二": 19,
+      "高三": 13,
+      "高一": 13
+    },
+    "stage_counts": {
+      "高中": 45
+    },
+    "tier_counts": {
+      "宽泛": 42,
+      "精确": 2,
+      "扩展": 1
+    },
+    "year_range": [
+      2008,
+      2025
+    ],
+    "native_han_mean": 627.8222222222222,
+    "native_han_median": 668,
+    "learner_han_mean": 357.6645161290323,
+    "learner_han_median": 358,
+    "length_smd": 2.979480131508805
+  },
+  "NY2": {
+    "selected": 45,
+    "learner_code": "Y2",
+    "grade_counts": {
+      "高一": 15,
+      "高二": 14,
+      "高三": 16
+    },
+    "stage_counts": {
+      "高中": 45
+    },
+    "tier_counts": {
+      "精确": 3,
+      "宽泛": 31,
+      "扩展": 10,
+      "近似": 1
+    },
+    "year_range": [
+      2009,
+      2025
+    ],
+    "native_han_mean": 528.4444444444445,
+    "native_han_median": 540,
+    "learner_han_mean": 382.28387096774196,
+    "learner_han_median": 372,
+    "length_smd": 1.2402646758270646
+  }
+}
