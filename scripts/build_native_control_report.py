@@ -102,7 +102,7 @@ def add_static_toc(document: Document) -> None:
             ["摘要", 3],
             ["1 研究背景与研究问题", 4],
             ["2 语料来源、版权与样本构建", 4],
-            ["3 分词、301项特征与五维投影", 8],
+            ["3 分词、语言特征与五维投影", 8],
             ["4 统计方法", 8],
             ["5 五维总体结果", 9],
             ["6 四个题目的配对解释", 14],
@@ -345,10 +345,10 @@ def build_report(
     )
 
     document.add_page_break()
-    document.add_heading("3 分词、301项特征与五维投影", level=1)
+    document.add_heading("3 分词、语言特征与五维投影", level=1)
     add_paragraph(
         document,
-        "母语清洗文本使用与学习者作文完全相同的PyNLPIR分词、细粒度词性映射、HSK词汇大纲和语言特征词表，生成301列母语统计宽表。基本信息中的国籍统一写为“中国（公开网络样本）”，作文分数留空，不人为赋分。母语统计宽表与学习者宽表逐列对齐，已有分词、词性、HSK和七类语言特征恒等关系均执行同一验证。",
+        "母语清洗文本使用与学习者作文完全相同的PyNLPIR分词、细粒度词性映射、HSK词汇大纲和语言特征词表，生成与学习者逐列对齐的母语统计宽表。基本信息中的国籍统一写为“中国（公开网络样本）”，作文分数留空，不人为赋分。分词、词性、熟语、复句和HSK等统计均执行同一验证。",
     )
     add_paragraph(
         document,
@@ -586,7 +586,7 @@ def build_report(
     literature = pd.DataFrame(
         [
             ["样本", "日本学习者与母语者记叙文", "多体裁日本学习者与母语者作文", "四题HSK学习者与公开网络高中作文参照"],
-            ["指标", "111项中筛选58项", "语义与形式指标综合", "301列中固定原五维39项投影"],
+            ["指标", "111项中筛选58项", "语义与形式指标综合", "当前宽表中固定原五维39项投影"],
             ["主要方法", "MF/MD因子分析", "MF/MD因子分析与多体裁比较", "固定投影、Welch、HC3、重抽样、联合EFA"],
             ["可比维度", "语句复杂性、动作描写等", "词汇产出丰富度、动作描写等", "五维均可与论文概念对照"],
             ["关键限制", "单一学习者母语背景", "体裁与任务差异", "网页身份与编辑情况不可独立核验"],
@@ -645,7 +645,7 @@ def build_report(
     document.add_heading("15 结论", level=1)
     add_paragraph(
         document,
-        f"本项目成功把{native_count}篇公开网络高中作文参照文本接入与620篇HSK学习者作文一致的301项统计流程，并在不改变原学习者五维模型的前提下完成固定投影。主分析同时报告效应量、置信区间、多重校正、篇幅匹配、主题与年份敏感性以及联合因子结构，形成了比简单均值比较更完整的证据链。",
+        f"本项目成功把{native_count}篇公开网络高中作文参照文本接入与620篇HSK学习者作文一致的统计流程，并在不改变原学习者五维模型的前提下完成固定投影。主分析同时报告效应量、置信区间、多重校正、篇幅匹配、主题与年份敏感性以及联合因子结构，形成了比简单均值比较更完整的证据链。",
     )
     add_paragraph(
         document,
@@ -675,7 +675,7 @@ def build_report(
     )
     add_paragraph(
         document,
-        "复现顺序：运行collect_zuowen_native_controls.py采集与筛选；使用x86_64 Python运行segment_native_control_texts.py完成PyNLPIR分词和301项统计；运行两个工作簿生成脚本；运行analyze_native_control.py生成统计表和图；最后运行本报告脚本并渲染为PDF。",
+        "复现顺序：运行collect_zuowen_native_controls.py采集与筛选；使用x86_64 Python运行segment_native_control_texts.py完成PyNLPIR分词和同口径统计；运行两个工作簿生成脚本；运行analyze_native_control.py生成统计表和图；最后运行本报告脚本并渲染为PDF。",
     )
     document.add_heading("附录B 敏感性明细", level=1)
     sensitivity_table = sensitivity.head(60)

@@ -41,7 +41,7 @@ DEFAULT_OUTPUT_DIR = "outputs/mfmd_analysis"
 DEFAULT_SEED = 20260829
 
 EXPECTED_ROWS = 620
-EXPECTED_COLUMNS = 301
+MIN_EXPECTED_COLUMNS = 301
 EXPECTED_CODES = ("J1", "J2", "Y1", "Y2")
 EXPECTED_CODE_COUNT = 155
 EXPECTED_SCORES = (55, 60, 65, 70, 80, 85, 90, 95)
@@ -52,7 +52,8 @@ FEATURE_CATEGORIES = {
     "句段结构",
     "词性",
     "语法标记",
-    "篇章连接",
+    "复句关系",
+    "熟语",
     "记叙描写",
     "HSK",
 }
@@ -76,7 +77,7 @@ DIRECT_METRIC_MARKERS = (
 
 DROP_EXACT = {
     "人称代词总每千字",
-    "连接词总每千字",
+    "复句句次总每千字",
     "评价词总每千字",
     "HSK词汇每千字",
     "非HSK词汇每千字",
@@ -94,10 +95,10 @@ DROP_EXACT = {
     "实词每千字",
     "虚词每千字",
     "其他词每千字",
-    "单字词每千字",
-    "双字词每千字",
-    "三字及以上词每千字",
-    "单字词占比",
+    "单音节词每千字",
+    "双音节词每千字",
+    "三音节及以上词每千字",
+    "单音节词占比",
     "初等词汇占比",
     "HSK词汇覆盖率",
 }
@@ -114,7 +115,7 @@ PREFERRED_FEATURES = {
     "句长标准差_字",
     "超过30字长句占比",
     "平均每句分句数",
-    "连接词多样性",
+    "复句类型多样性",
     "第一人称代词占人称代词比例",
     "最长连续动词序列",
     "中等词汇占比",
@@ -125,11 +126,11 @@ PREFERRED_FEATURES = {
 
 THEME_KEYWORDS = {
     "词汇丰富度与词汇扩展": ("TTR", "Guiraud", "MATTR", "去重", "仅出现一次"),
-    "词汇等级与词形复杂度": ("级词汇", "非HSK", "平均词长", "三字及以上"),
+    "词汇等级与词形复杂度": ("级词汇", "非HSK", "平均词长", "三音节及以上"),
     "句法延展与分句复杂度": ("句长", "长句", "分句", "逗号", "段落长度"),
     "人称指涉与叙述参与": ("第一人称", "第二人称", "第三人称", "代词"),
     "动作过程与动词链": ("动作动词", "趋向动词", "连续动词", "动词每千字", "情态动词"),
-    "篇章连接与逻辑组织": ("连接词", "因果", "转折", "条件", "递进", "并列", "顺序", "总结", "举例"),
+    "复句关系与逻辑组织": ("复句", "因果", "转折", "条件", "假设", "目的", "递进", "并列", "承接", "解说"),
     "时间叙述与体标记": ("时间", "时态助词", "了每千字", "着每千字", "过每千字"),
     "评价立场与副词修饰": ("评价词", "程度副词", "副词每千字", "否定词", "心理动词"),
     "信息密度与实词使用": ("词汇密度", "实词率", "名词每千字", "内容词", "形容词"),
@@ -276,8 +277,8 @@ def load_inputs(workbook_path: Path) -> tuple[pd.DataFrame, pd.DataFrame, dict[s
 
 def validate_inputs(data: pd.DataFrame, clean_text_dir: Path) -> dict[str, Any]:
     errors: list[str] = []
-    if data.shape != (EXPECTED_ROWS, EXPECTED_COLUMNS):
-        errors.append(f"宽表应为{EXPECTED_ROWS}行×{EXPECTED_COLUMNS}列，实际为{data.shape}")
+    if data.shape[0] != EXPECTED_ROWS or data.shape[1] < MIN_EXPECTED_COLUMNS:
+        errors.append(f"宽表应为{EXPECTED_ROWS}行且至少{MIN_EXPECTED_COLUMNS}列，实际为{data.shape}")
     if data.isna().any().any():
         missing = int(data.isna().sum().sum())
         errors.append(f"宽表存在{missing}个缺失值")

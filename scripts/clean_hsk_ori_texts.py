@@ -25,7 +25,7 @@ FULLWIDTH_MARKS = str.maketrans(
 FOOTER_RE = re.compile(r"^(?:[（(][A-Za-z0-9]+[）)]\s*)+$")
 META_RE = re.compile(r"^\s*\d{6,7}[^。\n]{0,80}\.\d+.*$")
 CJ_PAYLOAD_RE = re.compile(r"^CJ([+-])([A-Za-z]*)(.*)$", re.DOTALL)
-LEFTOVER_MARK_RE = re.compile(r"\[[A-Z#][^\]]{0,40}\]|\{[A-Z][^{}]{0,80}\}")
+LEFTOVER_MARK_RE = re.compile(r"\[[A-Za-z#][^\]]{0,40}\]|\{[A-Za-z][^{}]{0,80}\}")
 
 
 @dataclass(frozen=True)
@@ -188,6 +188,8 @@ def clean_square_marker(raw_content: str) -> str:
     if raw_content.startswith("#"):
         return ""
     if raw_content[:1] in {"C", "B", "L", "D", "F", "Y", "P"}:
+        return ""
+    if raw_content[:1] in {"c", "b", "l", "d", "f", "y", "p"}:
         return ""
 
     if looks_like_annotation(raw_content):

@@ -12,35 +12,45 @@ try:
     from .segment_hsk_clean_texts import (
         DEFAULT_FEATURE_LEXICON,
         DEFAULT_HSK_VOCAB,
+        DEFAULT_IDIOM_LEXICON,
         DEFAULT_LONG_SENTENCE_THRESHOLD,
         DEFAULT_MATTR_WINDOW,
+        DEFAULT_PAPER_FEATURE_LEXICON,
         EssayRecord,
         atomic_write_text,
         build_stats_rows,
         compile_feature_lexicon,
+        compile_idiom_lexicon,
         import_runtime_dependencies,
         read_feature_lexicon,
+        read_idiom_lexicon,
         read_hsk_vocabulary,
         segment_record,
         source_path_for,
         validate_stats,
+        validate_feature_lexicon_specs,
     )
 except ImportError:
     from segment_hsk_clean_texts import (
         DEFAULT_FEATURE_LEXICON,
         DEFAULT_HSK_VOCAB,
+        DEFAULT_IDIOM_LEXICON,
         DEFAULT_LONG_SENTENCE_THRESHOLD,
         DEFAULT_MATTR_WINDOW,
+        DEFAULT_PAPER_FEATURE_LEXICON,
         EssayRecord,
         atomic_write_text,
         build_stats_rows,
         compile_feature_lexicon,
+        compile_idiom_lexicon,
         import_runtime_dependencies,
         read_feature_lexicon,
+        read_idiom_lexicon,
         read_hsk_vocabulary,
         segment_record,
         source_path_for,
         validate_stats,
+        validate_feature_lexicon_specs,
     )
 
 
@@ -53,7 +63,7 @@ EXPECTED_NATIVE_CODES = ("NJ1", "NJ2", "NY1", "NY2")
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="为作文网母语参照语料生成PyNLPIR分词和301项统计。")
+    parser = argparse.ArgumentParser(description="为作文网母语参照语料生成与学习者宽表同口径的PyNLPIR统计。")
     parser.add_argument("--selected-json", default=DEFAULT_SELECTED_JSON)
     parser.add_argument("--input-dir", default=DEFAULT_INPUT_DIR)
     parser.add_argument("--seg-output-dir", default=DEFAULT_SEG_OUTPUT_DIR)
@@ -61,6 +71,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--learner-workbook", default=DEFAULT_LEARNER_WORKBOOK)
     parser.add_argument("--hsk-vocab", default=DEFAULT_HSK_VOCAB)
     parser.add_argument("--feature-lexicon", default=DEFAULT_FEATURE_LEXICON)
+    parser.add_argument("--paper-feature-lexicon", default=DEFAULT_PAPER_FEATURE_LEXICON)
+    parser.add_argument("--idiom-lexicon", default=DEFAULT_IDIOM_LEXICON)
     parser.add_argument("--mattr-window", type=int, default=DEFAULT_MATTR_WINDOW)
     parser.add_argument("--long-sentence-threshold", type=int, default=DEFAULT_LONG_SENTENCE_THRESHOLD)
     parser.add_argument("--limit", type=int, default=None)
@@ -134,8 +146,8 @@ def read_learner_schema(path: Path, load_workbook: Any) -> tuple[list[str], list
         for row in dictionary_sheet.iter_rows(min_row=2, values_only=True)
     ]
     workbook.close()
-    if len(headers) != 301:
-        raise ValueError(f"学习者主宽表应有301列，实际{len(headers)}")
+    if len(headers) < 301:
+        raise ValueError(f"学习者主宽表字段异常：至少应有301列，实际{len(headers)}")
     return headers, dictionary_rows
 
 
@@ -153,7 +165,7 @@ def align_rows_to_learner_schema(
     unfillable_missing = sorted(set(missing).difference(fillable_missing))
     if extras or unfillable_missing:
         raise ValueError(
-            "母语统计字段与学习者301列不一致；"
+            "母语统计字段与学习者主宽表不一致；"
             f"新增={extras}，缺少={unfillable_missing}"
         )
     index = {name: position for position, name in enumerate(source_names)}
@@ -200,6 +212,8 @@ def main() -> int:
     learner_workbook = Path(args.learner_workbook)
     hsk_vocab_path = Path(args.hsk_vocab)
     feature_lexicon_path = Path(args.feature_lexicon)
+    paper_feature_lexicon_path = Path(args.paper_feature_lexicon)
+    idiom_lexicon_path = Path(args.idiom_lexicon)
 
     pynlpir, _, load_workbook, _, _, _, _ = import_runtime_dependencies()
     records = load_native_records(selected_json, args.limit)
@@ -208,7 +222,12 @@ def main() -> int:
         raise FileNotFoundError(f"缺少母语清洗文本：{missing_sources[:20]}")
     learner_headers, learner_dictionary = read_learner_schema(learner_workbook, load_workbook)
     hsk_vocabulary = read_hsk_vocabulary(hsk_vocab_path)
-    feature_lexicon_specs = read_feature_lexicon(feature_lexicon_path)
+    feature_lexicon_specs = [
+        *read_feature_lexicon(feature_lexicon_path),
+        *read_feature_lexicon(paper_feature_lexicon_path),
+    ]
+    validate_feature_lexicon_specs(feature_lexicon_specs)
+    idiom_lexicon_specs = read_idiom_lexicon(idiom_lexicon_path)
     print(f"母语样本：{selected_json}（{len(records)}篇）")
     print(f"清洗文本：{input_dir}")
     print(f"分词输出：{seg_output_dir}")
@@ -228,6 +247,10 @@ def main() -> int:
             feature_lexicon_specs,
             lambda term: pynlpir.segment(term, pos_names=None),
         )
+        idiom_lexicon = compile_idiom_lexicon(
+            idiom_lexicon_specs,
+            lambda term: pynlpir.segment(term, pos_names=None),
+        )
         for index, record in enumerate(records, start=1):
             stats.append(
                 segment_record(
@@ -237,6 +260,7 @@ def main() -> int:
                     pynlpir=pynlpir,
                     hsk_vocabulary=hsk_vocabulary,
                     feature_lexicon=feature_lexicon,
+                    idiom_lexicon=idiom_lexicon,
                     mattr_window=args.mattr_window,
                     long_sentence_threshold=args.long_sentence_threshold,
                 )

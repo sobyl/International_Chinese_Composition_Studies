@@ -102,7 +102,7 @@ TOC_ENTRIES = [
     ("摘要", 3),
     ("1 研究背景与整合问题", 4),
     ("2 数据来源与800篇样本", 6),
-    ("3 301项语言特征与统计方法", 9),
+    ("3 语言特征与统计方法", 9),
     ("4 学习者作文的五维结构", 12),
     ("5 学习者四组、分数与国籍", 16),
     ("6 公开网络母语参照样本审计", 23),
@@ -229,7 +229,7 @@ def add_cover(document: Document, learner_meta: dict[str, Any], native_meta: dic
     summary.alignment = WD_ALIGN_PARAGRAPH.CENTER
     set_run_font(
         summary.add_run(
-            f"800篇作文 · 301列统计 · {learner_meta['selected_model']['feature_count']}项最终指标 · "
+            f"800篇作文 · 学习者与母语同口径宽表 · {learner_meta['selected_model']['feature_count']}项最终指标 · "
             f"{learner_meta['selected_model']['factor_count']}个语言维度"
         ),
         size=10.5,
@@ -272,8 +272,8 @@ def validate_inputs(
         raise ValueError("学习者作文必须为620篇")
     if native_validation["native_rows"] != 180 or len(native_stats) != 180 or len(native_master) != 180:
         raise ValueError("母语参照作文必须为180篇")
-    if learner_stats.shape[1] != 301 or native_stats.shape[1] != 301:
-        raise ValueError("两份词性统计宽表都必须为301列")
+    if learner_stats.shape[1] < 301 or learner_stats.shape[1] != native_stats.shape[1]:
+        raise ValueError("两份词性统计宽表必须至少301列且字段数一致")
     if learner_validation["code_counts"] != {"J1": 155, "J2": 155, "Y1": 155, "Y2": 155}:
         raise ValueError("学习者四组样本量不是各155篇")
     if native_validation["native_group_counts"] != {"NJ1": 45, "NJ2": 45, "NY1": 45, "NY2": 45}:
@@ -459,7 +459,7 @@ def build_report(
         document,
         "本报告把项目既有的学习者作文MF/MD分析和公开网络母语参照分析整合为一条连续证据链。"
         "学习者语料包括J1、J2、Y1、Y2四组各155篇，共620篇；母语参照包括NJ1、NJ2、NY1、NY2四组各45篇，共180篇。"
-        "两类语料均经过相同的PyNLPIR分词与301列语言特征统计，总样本量为800篇。母语参照来自作文网高中作文栏目，"
+        f"两类语料均经过相同的PyNLPIR分词与{learner_stats.shape[1]}列语言特征统计，总样本量为800篇。母语参照来自作文网高中作文栏目，"
         "可以证明网页栏目归类，但不能独立验证作者身份或排除编辑、转载和润色，因此全文统一使用“公开网络母语参照语料”这一审慎名称。",
     )
     add_paragraph(
@@ -602,7 +602,7 @@ def build_report(
             ["篇幅", "约358至391字均值", "按学习者分位点匹配", "母语文本仍整体偏长"],
             ["写作条件", "语料库既有评分作文", "公开网页文章", "时间、修改和资料使用均不可比"],
             ["身份信息", "国籍可用", "栏目和年级标签可用", "网页作者身份不能独立核验"],
-            ["文本处理", "标注清洗后分词", "网页正文清理后分词", "均使用相同301列统计口径"],
+            ["文本处理", "标注清洗后分词", "网页正文清理后分词", f"均使用相同{learner_stats.shape[1]}列统计口径"],
         ],
         columns=["维度", "学习者作文", "母语参照作文", "剩余限制"],
     )
@@ -616,23 +616,24 @@ def build_report(
     add_table_source(document, "表2-1  两类语料的可比条件与不可消除差异。")
 
     document.add_page_break()
-    document.add_heading("3 301项语言特征与统计方法", level=1)
+    document.add_heading("3 语言特征与统计方法", level=1)
     document.add_heading("3.1 特征体系", level=2)
     add_paragraph(
         document,
-        "每篇作文的宽表共有301列，包括8列基本信息、5列基础篇幅指标和288列派生语言特征。派生特征覆盖词汇丰富度、词汇密度与词长、句段结构、词性、"
-        "语法标记、篇章连接、记叙描写和HSK词汇八类。次数型特征同时保存原始次数与每千汉字频率，统一分母为纯文本汉字数；比例、均值、TTR、Guiraud和MATTR直接保存计算值。",
+        f"每篇作文的当前宽表共有{learner_stats.shape[1]}列，包括8列基本信息、基础篇幅及多类派生语言特征。派生特征覆盖词汇丰富度、词汇密度与词长、句段结构、词性、"
+        "熟语、语法标记、复句关系、记叙描写和HSK词汇。次数型特征同时保存原始次数与每千汉字频率，统一分母为纯文本汉字数；比例、均值、TTR、Guiraud和MATTR直接保存计算值。",
     )
     feature_system = pd.DataFrame(
         [
             ["基础篇幅", 5, "字数、纯文本字数、分词数、非标点分词数、去重词数"],
-            ["词汇丰富度", 18, "TTR、Guiraud、MATTR-50、仅出现一次词及词类TTR"],
-            ["词汇密度与词长", 21, "内容词、实虚词、词汇密度、平均词长及单双多字词"],
-            ["句段结构", 22, "句段数、句长、长句、逗号、分句和段落长度"],
-            ["词性", 46, "23类词性的次数与每千字频率"],
-            ["语法标记", 56, "代词、情态、否定、体标记、结构助词、介词和语气词"],
-            ["篇章连接", 21, "八类连接词及总量、去重数和多样性"],
-            ["记叙描写", 26, "时间、动作、心理、言说、趋向、评价、引语和动词链"],
+            ["词汇丰富度", 21, "TTR、Guiraud、MATTR-50、仅出现一次词、篇内高频词及词类TTR"],
+            ["词汇密度与词长", 23, "内容词、实虚词、词汇密度、平均词长及音节词长分布"],
+            ["句段结构", 24, "句段数、句长、长句、逗号、分句、段落词数和标点比例"],
+            ["词性", 54, "形容词三分法、人名等专名及主要词性的次数与每千字频率"],
+            ["熟语", 13, "成语、歇后语、惯用语、谚语及总量和多样性"],
+            ["语法标记", 88, "代词、情态、否定、体标记、结构助词、句式及论文补充特征"],
+            ["复句关系", 24, "因果等九类标记驱动复句句数及类型多样性"],
+            ["记叙描写", 54, "时间、动作、心理、言说、趋向、评价、引语和动词类别"],
             ["HSK", 78, "数字等级、初中高、覆盖率、词种、TTR及非HSK拆分"],
         ],
         columns=["类别", "字段数", "核心内容"],
@@ -644,7 +645,7 @@ def build_report(
         widths_dxa=[1900, 1000, 6460],
         font_size=8.2,
     )
-    add_table_source(document, "表3  301列宽表中的统计类别；另有8列基本信息。")
+    add_table_source(document, f"表3  {learner_stats.shape[1]}列宽表中的统计类别；另有8列基本信息。")
     add_paragraph(
         document,
         "HSK词汇使用11,000条新版考试大纲词表，主等级1至3归为初等、4至6归为中等、7至9归为高等。词汇占比分母为全部非标点token。"
@@ -676,7 +677,7 @@ def build_report(
         font_size=9,
     )
     add_table_source(document, "表4  学习者MF/MD指标筛选流程。完整逐项原因见分析结果工作簿。")
-    add_figure(document, learner_figures / "02_变量筛选流程.png", 3, "从301列宽表到最终39项指标的筛选流程")
+    add_figure(document, learner_figures / "02_变量筛选流程.png", 3, "从语言特征宽表到最终39项指标的筛选流程")
     add_figure(document, learner_figures / "03_平行分析与碎石图.png", 4, "平行分析、碎石图与候选模型比较")
     add_paragraph(
         document,
@@ -1209,7 +1210,7 @@ def build_report(
         ("词汇等级与丰富度联合解释。", "HSK高等级占比、非HSK覆盖、MATTR和词汇密度分别回答不同问题。词汇等级高不保证篇内多样，非HSK多也不自动等于高级表达。"),
         ("优先复核多重证据一致的大效应。", "同时通过Holm/BH校正、Bootstrap、篇幅重抽样和主题敏感性的指标，适合作为后续人工文本分析与教学干预候选。"),
         ("建立同题、可核验的母语语料。", "下一轮应让身份和年级可核验的高中生在相同题目、时间限制和修改条件下写作，以区分语言背景、网页编辑与任务条件。"),
-        ("保留模型的可复现链条。", "从清洗、分词、特征词表、301列宽表到39项因子模型均应版本化；新增语料时先固定投影，再把重新提取的因子结构作为敏感性分析。"),
+        ("保留模型的可复现链条。", "从清洗、分词、特征词表、统计宽表到因子模型均应版本化；新增语料时先固定投影，再把重新提取的因子结构作为敏感性分析。"),
     ]
     for lead, body in insights:
         add_paragraph(document, lead + body, bold_lead=lead)
@@ -1234,7 +1235,7 @@ def build_report(
     document.add_heading("12 结论", level=1)
     add_paragraph(
         document,
-        "本项目已经形成从620篇HSK学习者作文到180篇公开网络高中作文参照的统一分析链。301列宽表提供细粒度语言描述，39项最终指标把共同变异压缩为"
+        f"本项目已经形成从620篇HSK学习者作文到180篇公开网络高中作文参照的统一分析链。{learner_stats.shape[1]}列宽表提供细粒度语言描述，39项最终指标把共同变异压缩为"
         "词汇丰富度与词汇扩展、基础词汇与叙事推进、人称指涉与信息密度、句法延展与分句复杂度、动作过程与动词链五个维度。学习者内部的题目组、分数和补充国籍分析"
         "与母语参照投影共同表明，作文语言差异是多方向的资源配置，而不是单一复杂度阶梯。",
     )

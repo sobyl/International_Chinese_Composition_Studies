@@ -12,8 +12,9 @@ const CATEGORY_COLORS = {
   "词汇密度与词长": "#527A3B",
   "句段结构": "#A56A27",
   "词性": "#7E5B95",
+  "熟语": "#7A3E00",
   "语法标记": "#A04755",
-  "篇章连接": "#B17A32",
+  "复句关系": "#B17A32",
   "记叙描写": "#3E7D8B",
   "HSK": "#B4473A",
 };
@@ -199,7 +200,7 @@ async function buildMaster(selectedDocument, outputPath, previewDir) {
 
 
 async function buildStats(payload, outputPath, previewDir) {
-  if ((payload.headers || []).length !== 301) throw new Error(`统计宽表应有301列，实际${(payload.headers || []).length}`);
+  if ((payload.headers || []).length < 301) throw new Error(`统计宽表字段异常：至少应有301列，实际${(payload.headers || []).length}`);
   const workbook = Workbook.create();
   const categoryMap = new Map((payload.field_dictionary || []).map((row) => [row["字段名"], row["类别"]]));
   const stats = workbook.worksheets.add("词性统计");

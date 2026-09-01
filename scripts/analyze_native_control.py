@@ -143,10 +143,10 @@ def validate_inputs(
     assignments: pd.DataFrame,
 ) -> dict[str, Any]:
     errors: list[str] = []
-    if learner.shape != (620, 301):
-        errors.append(f"学习者宽表应为620×301，实际{learner.shape}")
-    if native.shape[1] != 301:
-        errors.append(f"母语宽表应为301列，实际{native.shape[1]}")
+    if learner.shape[0] != 620 or learner.shape[1] < 301:
+        errors.append(f"学习者宽表应为620行且至少301列，实际{learner.shape}")
+    if native.shape[1] != learner.shape[1]:
+        errors.append(f"母语宽表应与学习者宽表同列数，实际{native.shape[1]}与{learner.shape[1]}")
     if list(learner.columns) != list(native.columns):
         errors.append("母语宽表字段顺序与学习者宽表不一致")
     if len(native) != len(selected):

@@ -4,6 +4,7 @@ import math
 import unittest
 
 from scripts.linguistic_features import (
+    CompiledIdiomEntry,
     CompiledLexiconEntry,
     Token,
     compute_linguistic_features,
@@ -13,6 +14,7 @@ from scripts.linguistic_features import (
     raw_pos_parent,
     sentence_token_lengths,
 )
+from scripts.clean_hsk_ori_texts import clean_annotations
 
 
 def token(
@@ -45,6 +47,7 @@ class RawPosTests(unittest.TestCase):
             "Mg": "numeral",
             "Rg": "pronoun",
             "wj": "punctuation mark",
+            "happ": "adjective",
         }
         for raw_pos, parent in expected.items():
             with self.subTest(raw_pos=raw_pos):
@@ -104,6 +107,24 @@ class StructureTests(unittest.TestCase):
         ]
         self.assertEqual(count_verb_runs(tokens), (3, 3))
 
+    def test_average_paragraph_word_length_and_sentence_types(self) -> None:
+        tokens = [
+            token("我", "rr"), token("把", "pba"), token("书", "n"), token("看", "v"), token("完", "vf"), token("。", "wj"),
+            token("为什么", "ry", paragraph=1), token("呢", "y", paragraph=1), token("？", "ww", paragraph=1),
+        ]
+        result = compute_linguistic_features(
+            "我把书看完。\n为什么呢？",
+            tokens,
+            [],
+            mattr_window=50,
+            long_sentence_threshold=30,
+            hsk_levels=("1", "2", "3", "4", "5", "6", "7-9"),
+            hsk_groups={"初等": ("1", "2", "3"), "中等": ("4", "5", "6"), "高等": ("7-9",)},
+        )
+        self.assertEqual(result.values["平均段落长度_词"], 3.5)
+        self.assertEqual(result.values["把字句数"], 1)
+        self.assertEqual(result.values["特殊疑问句数"], 1)
+
 
 class LexiconMatcherTests(unittest.TestCase):
     def test_longest_sequence_wins_within_feature(self) -> None:
@@ -117,6 +138,49 @@ class LexiconMatcherTests(unittest.TestCase):
         )
         self.assertEqual(counts["因果连接词"], 1)
         self.assertEqual(terms["因果连接词"], {"因为"})
+
+    def test_compound_sentence_counts_sentences_not_markers(self) -> None:
+        entries = (
+            CompiledLexiconEntry("复句关系", "因果复句标记", "因为", ("因为",), ("c",), "test"),
+            CompiledLexiconEntry("复句关系", "因果复句标记", "所以", ("所以",), ("c",), "test"),
+        )
+        tokens = [token("因为", "c"), token("下雨", "v"), token("所以", "c"), token("回家", "v"), token("。", "wj")]
+        result = compute_linguistic_features(
+            "因为下雨，所以回家。",
+            tokens,
+            entries,
+            mattr_window=50,
+            long_sentence_threshold=30,
+            hsk_levels=("1", "2", "3", "4", "5", "6", "7-9"),
+            hsk_groups={"初等": ("1", "2", "3"), "中等": ("4", "5", "6"), "高等": ("7-9",)},
+        )
+        self.assertEqual(result.values["因果复句数"], 1)
+        self.assertEqual(result.values["复句句次总数"], 1)
+
+    def test_idiom_subtypes_sum_to_total(self) -> None:
+        idioms = (
+            CompiledIdiomEntry("成语", "一丝不苟", "", ("一丝不苟",), (), "test"),
+            CompiledIdiomEntry("谚语", "熟能生巧", "", ("熟能生巧",), (), "test"),
+        )
+        tokens = [token("一丝不苟", "i"), token("，", "wd"), token("熟能生巧", "l"), token("。", "wj")]
+        result = compute_linguistic_features(
+            "一丝不苟，熟能生巧。",
+            tokens,
+            [],
+            mattr_window=50,
+            long_sentence_threshold=30,
+            hsk_levels=("1", "2", "3", "4", "5", "6", "7-9"),
+            hsk_groups={"初等": ("1", "2", "3"), "中等": ("4", "5", "6"), "高等": ("7-9",)},
+            idiom_lexicon=idioms,
+        )
+        self.assertEqual(result.values["成语数"], 1)
+        self.assertEqual(result.values["谚语数"], 1)
+        self.assertEqual(result.values["熟语数"], 2)
+
+
+class CleaningRegressionTests(unittest.TestCase):
+    def test_lowercase_annotation_marker_is_removed(self) -> None:
+        self.assertEqual(clean_annotations("榜[b棒]样"), "榜样")
 
 
 class HskDerivedFeatureTests(unittest.TestCase):

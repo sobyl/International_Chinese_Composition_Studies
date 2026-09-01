@@ -6,6 +6,7 @@ import csv
 import platform
 import re
 import sys
+import unicodedata
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,38 +18,48 @@ try:
         CATEGORY_COHESION,
         CATEGORY_GRAMMAR,
         CATEGORY_HSK,
+        CATEGORY_IDIOM,
         CATEGORY_LEXICAL_DENSITY,
         CATEGORY_LEXICAL_DIVERSITY,
         CATEGORY_NARRATIVE,
         CATEGORY_STRUCTURE,
-        CONNECTIVE_FEATURES,
+        COMPOUND_SENTENCE_FEATURES,
+        CompiledIdiomEntry,
         CompiledLexiconEntry,
         FieldSpec,
         RAW_POS_PARENT,
         Token,
         compile_feature_lexicon,
+        compile_idiom_lexicon,
         compute_linguistic_features,
         raw_pos_parent,
         read_feature_lexicon,
+        read_idiom_lexicon,
+        validate_feature_lexicon_specs,
     )
 except ImportError:
     from linguistic_features import (
         CATEGORY_COHESION,
         CATEGORY_GRAMMAR,
         CATEGORY_HSK,
+        CATEGORY_IDIOM,
         CATEGORY_LEXICAL_DENSITY,
         CATEGORY_LEXICAL_DIVERSITY,
         CATEGORY_NARRATIVE,
         CATEGORY_STRUCTURE,
-        CONNECTIVE_FEATURES,
+        COMPOUND_SENTENCE_FEATURES,
+        CompiledIdiomEntry,
         CompiledLexiconEntry,
         FieldSpec,
         RAW_POS_PARENT,
         Token,
         compile_feature_lexicon,
+        compile_idiom_lexicon,
         compute_linguistic_features,
         raw_pos_parent,
         read_feature_lexicon,
+        read_idiom_lexicon,
+        validate_feature_lexicon_specs,
     )
 
 
@@ -58,6 +69,8 @@ DEFAULT_SEG_OUTPUT_DIR = "seg_text"
 DEFAULT_STATS_OUTPUT = "作文词性统计宽表.xlsx"
 DEFAULT_HSK_VOCAB = "outputs/新版HSK词汇大纲.csv"
 DEFAULT_FEATURE_LEXICON = "resources/语言特征词表.csv"
+DEFAULT_PAPER_FEATURE_LEXICON = "resources/论文补充语言特征词表.csv"
+DEFAULT_IDIOM_LEXICON = "resources/熟语词表.csv"
 DEFAULT_MATTR_WINDOW = 50
 DEFAULT_LONG_SENTENCE_THRESHOLD = 30
 SHEET_NAMES = ("J1", "J2", "Y1", "Y2")
@@ -105,7 +118,7 @@ POS_COLUMN_MAP = {
     "noun": "名词数",
     "pronoun": "代词数",
     "verb": "动词数",
-    "adjective": "形容词数",
+    "adjective": "性质形容词数",
     "adverb": "副词数",
     "preposition": "介词数",
     "conjunction": "连词数",
@@ -114,22 +127,30 @@ POS_COLUMN_MAP = {
     "classifier": "量词数",
     "time word": "时间词数",
     "noun of locality": "方位词数",
-    "locative word": "方位词数",
+    "locative word": "处所词数",
+    "prefix": "前缀数",
     "suffix": "后缀数",
     "modal particle": "语气词数",
     "distinguishing word": "区别词数",
     "status word": "状态词数",
     "onomatopoeia": "拟声词数",
     "interjection": "叹词数",
-    "multiword expression": "熟语数",
+    "abbreviation": "简称略语数",
     PUNCT_POS: "标点数",
 }
 
 POS_COLUMN_ORDER = [
     "名词数",
+    "人名数",
+    "地名数",
+    "机构团体数",
+    "其他专名数",
     "代词数",
     "动词数",
     "形容词数",
+    "性质形容词数",
+    "区别词数",
+    "状态词数",
     "副词数",
     "介词数",
     "连词数",
@@ -137,16 +158,18 @@ POS_COLUMN_ORDER = [
     "数词数",
     "量词数",
     "时间词数",
+    "处所词数",
     "方位词数",
+    "前缀数",
     "后缀数",
     "语气词数",
-    "区别词数",
-    "状态词数",
     "拟声词数",
     "叹词数",
-    "熟语数",
+    "简称略语数",
     "标点数",
 ]
+
+DERIVED_POS_COLUMNS = frozenset({"人名数", "地名数", "机构团体数", "其他专名数", "形容词数"})
 
 BASIC_HEADERS = ["篇名代码", "篇名", "作文编码", "国籍", "作文题目", "作文分数", "体裁", "作文文件名"]
 TEXT_STAT_HEADERS = ["字数", "纯文本字数", "分词数", "非标点分词数", "去重词数"]
@@ -178,6 +201,7 @@ class EssayStats:
     non_punct_token_count: int
     unique_word_count: int
     pos_counts: Counter[str]
+    derived_pos_counts: Counter[str]
     hsk_level_counts: Counter[str]
     feature_values: dict[str, int | float]
     feature_fields: tuple[FieldSpec, ...]
@@ -199,6 +223,16 @@ def parse_args() -> argparse.Namespace:
         "--feature-lexicon",
         default=DEFAULT_FEATURE_LEXICON,
         help=f"语言特征词表 CSV，默认：{DEFAULT_FEATURE_LEXICON}",
+    )
+    parser.add_argument(
+        "--paper-feature-lexicon",
+        default=DEFAULT_PAPER_FEATURE_LEXICON,
+        help=f"论文补充语言特征词表 CSV，默认：{DEFAULT_PAPER_FEATURE_LEXICON}",
+    )
+    parser.add_argument(
+        "--idiom-lexicon",
+        default=DEFAULT_IDIOM_LEXICON,
+        help=f"熟语词表 CSV，默认：{DEFAULT_IDIOM_LEXICON}",
     )
     parser.add_argument(
         "--mattr-window",
@@ -410,8 +444,24 @@ def pos_column_name(pos: str | None) -> str:
 
 
 def pos_label(pos: str | None) -> str:
+    if (pos or "").strip() == "adjective":
+        return "形容词"
     column_name = pos_column_name(pos)
     return column_name[:-1] if column_name.endswith("数") else column_name
+
+
+def is_unicode_punctuation(text: str) -> bool:
+    return bool(text) and all(unicodedata.category(char).startswith("P") for char in text)
+
+
+def inferred_punctuation_pos(text: str) -> str:
+    if text in {"。", "."}:
+        return "wj"
+    if text in {"？", "?"}:
+        return "ww"
+    if text in {"！", "!"}:
+        return "wt"
+    return "wd"
 
 
 def count_chars(text: str) -> tuple[int, int]:
@@ -423,9 +473,10 @@ def segment_lines(
     text: str,
     pynlpir: Any,
     hsk_vocabulary: dict[str, tuple[HskVocabularyEntry, ...]],
-) -> tuple[str, Counter[str], Counter[str], int, int, list[Token]]:
+) -> tuple[str, Counter[str], Counter[str], Counter[str], int, int, list[Token]]:
     output_lines: list[str] = []
     pos_counts: Counter[str] = Counter()
+    derived_pos_counts: Counter[str] = Counter()
     hsk_level_counts: Counter[str] = Counter()
     unique_words: set[str] = set()
     feature_tokens: list[Token] = []
@@ -446,17 +497,33 @@ def segment_lines(
             parent_words = [normalize_cell(word) for word, _ in parent_fallback]
             if raw_words != parent_words:
                 raise ValueError("PyNLPIR原始词性与大类词性两次分词结果不一致，无法安全对齐")
-        token_count += len(segmented)
         tokens: list[str] = []
         for token_index, (word, raw_pos) in enumerate(segmented):
             word_text = str(word).replace("\n", " ").strip()
+            if not word_text:
+                continue
             raw_pos_text = normalize_cell(raw_pos).lower()
             parent_pos = raw_pos_parent(raw_pos_text)
             if not parent_pos and parent_fallback is not None:
                 parent_pos = normalize_cell(parent_fallback[token_index][1])
                 raw_pos_text = PARENT_POS_TO_RAW_ROOT.get(parent_pos, raw_pos_text)
+            if not parent_pos and is_unicode_punctuation(word_text):
+                parent_pos = PUNCT_POS
+                raw_pos_text = inferred_punctuation_pos(word_text)
+            token_count += 1
             label = pos_label(parent_pos)
             pos_counts[pos_column_name(parent_pos)] += 1
+            raw_lower = raw_pos_text.lower()
+            if raw_lower.startswith(("a", "b", "z")) or raw_lower == "happ":
+                derived_pos_counts["形容词数"] += 1
+            if raw_lower.startswith("nr"):
+                derived_pos_counts["人名数"] += 1
+            elif raw_lower.startswith("ns"):
+                derived_pos_counts["地名数"] += 1
+            elif raw_lower.startswith("nt"):
+                derived_pos_counts["机构团体数"] += 1
+            elif raw_lower.startswith("nz"):
+                derived_pos_counts["其他专名数"] += 1
             hsk_level: str | None = None
             if parent_pos != PUNCT_POS:
                 if word_text:
@@ -479,6 +546,7 @@ def segment_lines(
     return (
         "\n".join(output_lines).rstrip() + "\n",
         pos_counts,
+        derived_pos_counts,
         hsk_level_counts,
         token_count,
         len(unique_words),
@@ -501,12 +569,21 @@ def segment_record(
     pynlpir: Any,
     hsk_vocabulary: dict[str, tuple[HskVocabularyEntry, ...]],
     feature_lexicon: tuple[CompiledLexiconEntry, ...],
+    idiom_lexicon: tuple[CompiledIdiomEntry, ...],
     mattr_window: int,
     long_sentence_threshold: int,
 ) -> EssayStats:
     source_path = source_path_for(input_dir, record)
     text = source_path.read_text(encoding="utf-8")
-    segmented_text, pos_counts, hsk_level_counts, token_count, unique_word_count, feature_tokens = segment_lines(
+    (
+        segmented_text,
+        pos_counts,
+        derived_pos_counts,
+        hsk_level_counts,
+        token_count,
+        unique_word_count,
+        feature_tokens,
+    ) = segment_lines(
         text,
         pynlpir,
         hsk_vocabulary,
@@ -521,6 +598,7 @@ def segment_record(
         long_sentence_threshold=long_sentence_threshold,
         hsk_levels=HSK_LEVELS,
         hsk_groups=HSK_LEVEL_GROUPS,
+        idiom_lexicon=idiom_lexicon,
     )
     atomic_write_text(seg_path_for(seg_output_dir, record), segmented_text)
     return EssayStats(
@@ -531,6 +609,7 @@ def segment_record(
         non_punct_token_count=non_punct_token_count,
         unique_word_count=unique_word_count,
         pos_counts=pos_counts,
+        derived_pos_counts=derived_pos_counts,
         hsk_level_counts=hsk_level_counts,
         feature_values=feature_result.values,
         feature_fields=feature_result.fields,
@@ -544,6 +623,7 @@ FEATURE_CATEGORY_ORDER = (
     CATEGORY_LEXICAL_DIVERSITY,
     CATEGORY_LEXICAL_DENSITY,
     CATEGORY_STRUCTURE,
+    CATEGORY_IDIOM,
     CATEGORY_GRAMMAR,
     CATEGORY_COHESION,
     CATEGORY_NARRATIVE,
@@ -627,12 +707,22 @@ def build_stats_rows(stats: list[EssayStats]) -> tuple[list[FieldSpec], list[lis
 
     for column in pos_columns:
         label = column[:-1] if column.endswith("数") else column
+        if column == "形容词数":
+            definition = "性质形容词、区别词和状态词token数量之和"
+            formula = "性质形容词数 + 区别词数 + 状态词数"
+        elif column in {"人名数", "地名数", "机构团体数", "其他专名数"}:
+            raw_prefix = {"人名数": "nr*", "地名数": "ns*", "机构团体数": "nt*", "其他专名数": "nz*"}[column]
+            definition = f"PyNLPIR细粒度词性{raw_prefix}识别的{label}token数量"
+            formula = "按PyNLPIR细粒度词性直接计数"
+        else:
+            definition = f"PyNLPIR大类词性为{label}的token数量"
+            formula = "按PyNLPIR词性直接计数"
         fields.append(
             FieldSpec(
                 name=column,
                 category=CATEGORY_POS,
-                definition=f"PyNLPIR大类词性为{label}的token数量",
-                formula="按PyNLPIR词性直接计数",
+                definition=definition,
+                formula=formula,
                 unit="次",
                 number_format="0",
             )
@@ -648,7 +738,7 @@ def build_stats_rows(stats: list[EssayStats]) -> tuple[list[FieldSpec], list[lis
             )
         )
 
-    for category in (CATEGORY_GRAMMAR, CATEGORY_COHESION, CATEGORY_NARRATIVE, CATEGORY_HSK):
+    for category in (CATEGORY_IDIOM, CATEGORY_GRAMMAR, CATEGORY_COHESION, CATEGORY_NARRATIVE, CATEGORY_HSK):
         fields.extend(feature_fields_by_category[category])
 
     field_names = [field.name for field in fields]
@@ -676,7 +766,11 @@ def build_stats_rows(stats: list[EssayStats]) -> tuple[list[FieldSpec], list[lis
             **item.feature_values,
         }
         for column in pos_columns:
-            count = item.pos_counts.get(column, 0)
+            count = (
+                item.derived_pos_counts.get(column, 0)
+                if column in DERIVED_POS_COLUMNS
+                else item.pos_counts.get(column, 0)
+            )
             values[column] = count
             values[pos_rate_name(column)] = count * 1000 / item.han_char_count if item.han_char_count else 0.0
         rows.append([values[field.name] for field in fields])
@@ -711,6 +805,7 @@ def save_stats_workbook(
         CATEGORY_LEXICAL_DENSITY: "C65911",
         CATEGORY_STRUCTURE: "BF9000",
         CATEGORY_POS: "548235",
+        CATEGORY_IDIOM: "7A3E00",
         CATEGORY_GRAMMAR: "2F75B5",
         CATEGORY_COHESION: "A64D79",
         CATEGORY_NARRATIVE: "7F6000",
@@ -789,6 +884,14 @@ def validate_stats(stats: list[EssayStats]) -> None:
                 f"{item.record.filename} 去重词数超出有效范围："
                 f"{item.unique_word_count} > {item.non_punct_token_count}"
             )
+        expected_adjectives = sum(
+            item.pos_counts.get(column, 0)
+            for column in ("性质形容词数", "区别词数", "状态词数")
+        )
+        if item.derived_pos_counts.get("形容词数", 0) != expected_adjectives:
+            raise ValueError(f"{item.record.filename} 形容词总数不等于性质形容词、区别词和状态词之和")
+        if sum(item.derived_pos_counts.get(column, 0) for column in ("人名数", "地名数", "机构团体数", "其他专名数")) > item.pos_counts.get("名词数", 0):
+            raise ValueError(f"{item.record.filename} 专名细分数量超过名词总数")
         unknown_levels = set(item.hsk_level_counts).difference(HSK_LEVELS)
         if unknown_levels:
             raise ValueError(f"{item.record.filename} 存在无效 HSK 主等级：{sorted(unknown_levels)}")
@@ -816,9 +919,15 @@ def validate_stats(stats: list[EssayStats]) -> None:
             if values[f"{group}词汇种类数"] > values[f"{group}词汇次数"]:
                 raise ValueError(f"{item.record.filename} {group}词汇种类数超过次数")
 
-        connector_sum = sum(values[f"{feature}数"] for feature in CONNECTIVE_FEATURES)
-        if values["连接词总数"] != connector_sum:
-            raise ValueError(f"{item.record.filename} 连接词总数不等于八类连接标记之和")
+        compound_sum = sum(values[f"{feature}数"] for feature in COMPOUND_SENTENCE_FEATURES)
+        if values["复句句次总数"] != compound_sum:
+            raise ValueError(f"{item.record.filename} 复句句次总数不等于九类复句句数之和")
+        idiom_sum = sum(values[f"{label}数"] for label in ("成语", "歇后语", "惯用语", "谚语"))
+        if values["熟语数"] != idiom_sum:
+            raise ValueError(f"{item.record.filename} 熟语数不等于四类熟语之和")
+        syllable_sum = sum(values[f"{label}数"] for label in ("单音节词", "双音节词", "三音节及以上词"))
+        if values["汉字词分词数"] != syllable_sum:
+            raise ValueError(f"{item.record.filename} 汉字词分词数不等于三个音节长度组之和")
         non_hsk_partition_sum = sum(
             values[f"非HSK{label}数"] for label in ("专名", "数字", "字母串", "其他")
         )
@@ -842,11 +951,18 @@ def main() -> int:
     stats_output = Path(args.stats_output)
     hsk_vocab_path = Path(args.hsk_vocab)
     feature_lexicon_path = Path(args.feature_lexicon)
+    paper_feature_lexicon_path = Path(args.paper_feature_lexicon)
+    idiom_lexicon_path = Path(args.idiom_lexicon)
 
     records = read_records(workbook_path, args.limit, load_workbook)
     validate_sources(records, input_dir)
     hsk_vocabulary = read_hsk_vocabulary(hsk_vocab_path)
-    feature_lexicon_specs = read_feature_lexicon(feature_lexicon_path)
+    feature_lexicon_specs = [
+        *read_feature_lexicon(feature_lexicon_path),
+        *read_feature_lexicon(paper_feature_lexicon_path),
+    ]
+    validate_feature_lexicon_specs(feature_lexicon_specs)
+    idiom_lexicon_specs = read_idiom_lexicon(idiom_lexicon_path)
 
     print(f"作文主表：{workbook_path}")
     print(f"清洗文本：{input_dir}")
@@ -854,6 +970,8 @@ def main() -> int:
     print(f"统计宽表：{stats_output}")
     print(f"HSK 词汇表：{hsk_vocab_path}（{sum(len(entries) for entries in hsk_vocabulary.values())} 条）")
     print(f"语言特征词表：{feature_lexicon_path}（{len(feature_lexicon_specs)} 条）")
+    print(f"论文补充词表：{paper_feature_lexicon_path}")
+    print(f"熟语词表：{idiom_lexicon_path}（{len(idiom_lexicon_specs)} 条）")
     print(f"MATTR窗口：{args.mattr_window}；长句阈值：>{args.long_sentence_threshold}字")
     print(f"本次处理：{len(records)} 篇")
 
@@ -870,6 +988,10 @@ def main() -> int:
             feature_lexicon_specs,
             lambda term: pynlpir.segment(term, pos_names=None),
         )
+        idiom_lexicon = compile_idiom_lexicon(
+            idiom_lexicon_specs,
+            lambda term: pynlpir.segment(term, pos_names=None),
+        )
         for index, record in enumerate(records, start=1):
             item = segment_record(
                 record,
@@ -878,6 +1000,7 @@ def main() -> int:
                 pynlpir,
                 hsk_vocabulary,
                 feature_lexicon,
+                idiom_lexicon,
                 args.mattr_window,
                 args.long_sentence_threshold,
             )

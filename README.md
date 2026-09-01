@@ -24,6 +24,7 @@
 │   ├── fetch_hsk_ori_texts.py
 │   ├── clean_hsk_ori_texts.py
 │   ├── extract_hsk_vocabulary.py
+│   ├── build_idiom_lexicon.py
 │   ├── segment_hsk_clean_texts.py
 │   ├── linguistic_features.py
 │   ├── analyze_composition_mfmd.py
@@ -37,6 +38,8 @@
 │   └── build_native_control_report.py
 ├── resources/
 │   ├── 语言特征词表.csv
+│   ├── 论文补充语言特征词表.csv
+│   ├── 熟语词表.csv
 │   └── native_control_manual_review.csv
 ├── tests/
 │   ├── fixtures/
@@ -85,15 +88,15 @@
 - `4.14作文前筛.xlsx`：原始筛选表，包含多个 sheet，是后续抽样的源数据。
 - `作文样本主表.xlsx`：当前主要迭代用表。四个 sheet 分别为 `J1`、`J2`、`Y1`、`Y2`，每个 sheet 155 篇。表内包含作文基本信息，并增加了 `作文文件名` 字段，例如 `J1_55_01`、`J1_60_02`。
 - `outputs/新版HSK词汇大纲.csv`：从新版 HSK 考试大纲提取的 11,000 条机器可读词汇，包含主等级、兼属等级、词语、拼音和词性等字段。
-- `作文词性统计宽表.xlsx`：项目最终主分析表，基于 `clean_text` 全量生成。`词性统计` sheet 每行对应一篇作文，`字段说明` sheet 逐列记录定义、公式和分母；后续统计分析应优先使用此表。
-- `作文语言特征多维分析报告.docx`、`作文语言特征多维分析报告.pdf`：基于620篇作文和301列主宽表生成的29页中文MF/MD学术分析报告，包含11幅统计图、五维解释、四组比较、分数关系、补充国籍分析及匿名文本例证。
-- `作文语言特征与母语参照综合分析报告.docx`、`作文语言特征与母语参照综合分析报告.pdf`：把620篇学习者作文MF/MD分析、180篇公开网络母语参照分析和母语样本审计摘要组织为同一研究链条的综合报告；保留原两份独立报告不变，不在报告中复制180行URL或网页全文。
+- `作文词性统计宽表.xlsx`：项目最终主分析表，基于 `clean_text` 全量生成，当前为620行、392列。`词性统计` sheet 每行对应一篇作文，`字段说明` sheet 逐列记录定义、公式和分母；后续统计分析应优先使用此表。
+- `作文语言特征多维分析报告.docx`、`作文语言特征多维分析报告.pdf`：基于620篇作文和此前301列宽表生成的29页中文MF/MD学术分析报告，包含11幅统计图、五维解释、四组比较、分数关系、补充国籍分析及匿名文本例证。该报告保留为既有分析版本，尚未用本次392列新口径重新拟合。
+- `作文语言特征与母语参照综合分析报告.docx`、`作文语言特征与母语参照综合分析报告.pdf`：把620篇学习者作文MF/MD分析、180篇公开网络母语参照分析和母语样本审计摘要组织为同一研究链条的综合报告；当前仍对应此前301列分析版本，尚未用392列新口径重新拟合。
 - `outputs/mfmd_analysis/作文多维分析结果.xlsx`：MF/MD分析的可审查结果工作簿，共20个sheet，保存变量筛选、候选模型诊断、因子载荷、维度得分、组间检验、稳健回归、文本例证和图表索引。
 - `outputs/mfmd_analysis/tables/`、`outputs/mfmd_analysis/figures/`：分析脚本生成的逐表CSV和11幅300 DPI图片；`analysis_metadata.json`保存随机种子、诊断和最终模型元数据。
 - `outputs/hsk_标注说明.md`：从 HSK 网站帮助页整理出的标注说明，用于理解和清洗原始标注文本。
 - `母语作文样本主表.xlsx`：作文网高中作文参照样本的来源审计主表，记录 `NJ1/NJ2/NY1/NY2`、对应学习者题目、URL、发布日期、年级、主题匹配层级、篇幅偏差、正文哈希和审核状态；不收录完整网页正文。
-- `母语作文词性统计宽表.xlsx`：180篇母语参照语料的301列派生统计，字段顺序和口径与学习者主宽表一致；作文分数留空，国籍统一标记为“中国（公开网络样本）”。
-- `作文语言特征母语对照分析报告.docx`、`作文语言特征母语对照分析报告.pdf`：29页详细比较报告，将母语参照作文投影到现有五维学习者量尺，包含采样审计、篇幅匹配、Welch检验、Hedges `g`、HC3回归、重抽样、主题/年份敏感性和联合因子分析。
+- `母语作文词性统计宽表.xlsx`：180篇母语参照语料的392列派生统计，字段顺序和口径与学习者主宽表完全一致；作文分数留空，国籍统一标记为“中国（公开网络样本）”。
+- `作文语言特征母语对照分析报告.docx`、`作文语言特征母语对照分析报告.pdf`：29页详细比较报告，将母语参照作文投影到现有五维学习者量尺；当前仍对应此前301列分析版本，尚未用392列新口径重新拟合。
 - `outputs/native_control_analysis/作文母语对照分析结果.xlsx`：母语对照分析的可审查结果工作簿，保存投影参数、逐篇得分、组间检验、39项特征比较、稳健回归、敏感性和联合模型结果。
 
 ### 文本目录
@@ -112,20 +115,23 @@
 - `scripts/fetch_hsk_ori_texts.py`：批量从 HSK 网站接口抓取原始标注文本，保存到 `ori_text`。
 - `scripts/clean_hsk_ori_texts.py`：清洗 `ori_text`，生成 `clean_text`，不修改原始文本。
 - `scripts/extract_hsk_vocabulary.py`：从新版 HSK 考试大纲 PDF 提取机器可读词汇 CSV。
+- `scripts/build_idiom_lexicon.py`：从公开成语、歇后语数据中筛选当前800篇语料实际命中的词项，并合并人工复核的显式谚语，生成可审查的熟语词表。
 - `scripts/segment_hsk_clean_texts.py`：使用 PyNLPIR 对 `clean_text` 分词，生成 `seg_text` 和语言特征宽表；细粒度词性用于语法特征，大类中文词性继续写入分词文本。
-- `scripts/linguistic_features.py`：不依赖 PyNLPIR 运行环境的纯计算模块，负责词汇、句段、语法、篇章、记叙描写和 HSK 派生特征。
+- `scripts/linguistic_features.py`：不依赖 PyNLPIR 运行环境的纯计算模块，负责词汇、句段、熟语、语法、复句、记叙描写和 HSK 派生特征。
 - `scripts/analyze_composition_mfmd.py`：以根目录主宽表为输入，完成变量筛选、平行分析、MinRes/Promax因子分析、Bootstrap稳定性、组间比较和稳健回归，并输出CSV、JSON与统计图。
 - `scripts/build_mfmd_workbook.mjs`：使用 `@oai/artifact-tool` 将分析JSON整理为多sheet结果工作簿。
 - `scripts/build_mfmd_report.py`：根据正式分析结果和图片生成中文DOCX分析报告；PDF由最终DOCX统一导出。
 - `scripts/collect_zuowen_native_controls.py`：低速单线程发现、抓取、解析和筛选作文网高中作文，支持缓存断点续跑、指数退避、主题分级、篇幅匹配、哈希和字符五元组去重，并输出完整候选审计。
-- `scripts/segment_native_control_texts.py`：复用现有PyNLPIR和七类语言特征逻辑，对母语清洗文本分词并生成与学习者宽表对齐的301列统计载荷。
+- `scripts/segment_native_control_texts.py`：复用现有PyNLPIR和语言特征逻辑，对母语清洗文本分词并生成与学习者392列宽表对齐的统计载荷。
 - `scripts/build_native_control_workbooks.mjs`：使用 `@oai/artifact-tool` 生成母语样本主表和母语词性统计宽表。
 - `scripts/analyze_native_control.py`：固定使用620篇学习者作文的39项指标投影参数和五维结构，执行母语对照、HC3回归、篇幅匹配重抽样、主题/年份敏感性和联合EFA。
 - `scripts/build_native_control_analysis_workbook.mjs`：生成多sheet母语对照分析结果工作簿。
 - `scripts/build_native_control_report.py`：根据正式统计表和300 DPI图片生成母语对照DOCX报告；PDF由最终DOCX统一导出。
-- `scripts/build_integrated_composition_report.py`：读取两阶段正式分析结果、两份301列宽表和母语样本主表，生成学习者内部分析与母语参照比较相统一的综合DOCX报告，不重新抽样或重估因子模型。
+- `scripts/build_integrated_composition_report.py`：读取两阶段正式分析结果、两份宽表和母语样本主表，生成学习者内部分析与母语参照比较相统一的综合DOCX报告，不重新抽样或重估因子模型。
 - `requirements-analysis.txt`：MF/MD分析与报告的固定版本Python依赖。
 - `resources/语言特征词表.csv`：可人工审查的语言特征词表，字段为 `大类、特征名、词项、允许词性前缀、来源说明`。
+- `resources/论文补充语言特征词表.csv`：根据刘艳春、胡显耀两篇多维分析论文补充的疑问副词、时间类别、情态类别、动词类别和复句关系标记词表。
+- `resources/熟语词表.csv`：成语、歇后语和显式谚语的语料命中词表；惯用语同时参考PyNLPIR的 `l/nl/vl/al/bl` 标签。
 - `tests/test_linguistic_features.py`：纯函数单元测试，覆盖 MATTR、句段切分、词表最长匹配、连续动词和 HSK 派生统计等口径。
 
 ## 常用运行命令
@@ -154,13 +160,23 @@ arch -x86_64 /usr/bin/python3 scripts/segment_hsk_clean_texts.py
 
 默认 HSK 词表为 `outputs/新版HSK词汇大纲.csv`，也可通过 `--hsk-vocab` 指定其他同结构 CSV。等级统计使用词表的 `主等级`：1-3 级合并为初等，4-6 级合并为中等，7-9 级为高等。每个等级的“词汇次数”按分词 token 出现次数统计，“词汇占比”的分母为该作文全部非标点分词数。
 
-默认语言特征词表为 `resources/语言特征词表.csv`，可通过 `--feature-lexicon` 替换。MATTR 窗口默认 50，可用 `--mattr-window` 调整；长句默认指汉字数严格大于 30，可用 `--long-sentence-threshold` 调整。
+默认基础语言特征词表为 `resources/语言特征词表.csv`，论文补充词表为 `resources/论文补充语言特征词表.csv`，熟语词表为 `resources/熟语词表.csv`，可分别通过 `--feature-lexicon`、`--paper-feature-lexicon`、`--idiom-lexicon` 替换。MATTR 窗口默认 50，可用 `--mattr-window` 调整；长句默认指汉字数严格大于 30，可用 `--long-sentence-threshold` 调整。
 
 文本统计包含 `字数`、`纯文本字数`、`分词数`、`非标点分词数`和`去重词数`。其中，`去重词数`按 PyNLPIR 分词后的词形精确去重，排除标点，但保留数字和字母等非标点 token。
 
 同形词对应多个主等级时，脚本优先使用 PyNLPIR 词性匹配词表词性；无法唯一判断时归入最低主等级。未命中词表的 token 不计入等级，但仍保留在占比分母中。
 
-宽表按以下类别排列：基本信息、基础篇幅、词汇丰富度、词汇密度与词长、句段结构、词性、语法标记、篇章连接、记叙描写、HSK。次数型语言特征同时给出每千汉字频率，统一公式为 `次数 ÷ 纯文本字数 × 1000`；比例、均值、TTR、Guiraud 和 MATTR 直接保存计算值。非 HSK 词仅按专名、数字、字母串和其他拆分，其中“其他”不等同于错误词或高级词。
+宽表按以下类别排列：基本信息、基础篇幅、词汇丰富度、词汇密度与词长、句段结构、词性、熟语、语法标记、复句关系、记叙描写、HSK。次数型语言特征同时给出每千汉字频率，统一公式为 `次数 ÷ 纯文本字数 × 1000`；比例、均值、TTR、Guiraud 和 MATTR 直接保存计算值。非 HSK 词仅按专名、数字、字母串和其他拆分，其中“其他”不等同于错误词或高级词。
+
+本次扩展的主要口径如下：
+
+- `平均段落长度_词`：每个非空段落的平均非标点token数。
+- `形容词数`：`性质形容词数 + 区别词数 + 状态词数`；三类同时单独保留。
+- `人名数/地名数/机构团体数/其他专名数`：分别依据PyNLPIR细粒度标签 `nr*/ns*/nt*/nz*`。
+- `单音节词/双音节词/三音节及以上词`：仅对全汉字token统计，以一个汉字对应一个音节近似；三类占比的分母为 `汉字词分词数`。
+- `熟语数`：成语、歇后语、惯用语和谚语之和；熟语词表是面向当前800篇语料的可复现快照，并不等同于穷尽性熟语词典。
+- 九类复句统计的是“含相应关系标记的句子数”，同一句同类标记只计一次；这是一种可复现的标记驱动识别，不等同于人工句法标注。
+- 论文补充项还包括篇内高频词前10位、标点比例、把字句/被字句、形容词作状语、疑问与感叹句、时间名词和时间副词分类、情态类别、私人性/公共性/建议要求类动词等。
 
 运行测试：
 
@@ -182,7 +198,7 @@ python -m unittest discover -s tests -v
 python3 scripts/collect_zuowen_native_controls.py
 ```
 
-PyNLPIR分词与301项特征统计：
+PyNLPIR分词与392列特征统计：
 
 ```bash
 arch -x86_64 /usr/bin/python3 scripts/segment_native_control_texts.py

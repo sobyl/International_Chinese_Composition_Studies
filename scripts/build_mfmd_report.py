@@ -509,6 +509,7 @@ def build_report(analysis_dir: Path, output_path: Path) -> None:
     dimension_scores = read_table("维度得分")
 
     selected = metadata["selected_model"]
+    column_count = metadata.get("validation", {}).get("columns", "当前")
     labels = selected["dimension_labels"]
     details = selected["dimension_details"]
 
@@ -520,7 +521,7 @@ def build_report(analysis_dir: Path, output_path: Path) -> None:
     document.add_heading("摘要", level=1)
     add_paragraph(
         document,
-        "本报告基于HSK作文语料库中J1、J2、Y1、Y2四类作文各155篇、共620篇文本，使用项目既有的301列语言特征宽表开展多特征/多维度（MF/MD）探索性分析。研究以每千汉字频率、词汇丰富度、句段结构、篇章连接、叙事描写及HSK等级词汇指标为基础，经稀疏性、共线性、变量级MSA和共同度筛选后，采用MinRes提取与Promax斜交旋转形成最终多维结构。",
+        f"本报告基于HSK作文语料库中J1、J2、Y1、Y2四类作文各155篇、共620篇文本，使用项目既有的{column_count}列语言特征宽表开展多特征/多维度（MF/MD）探索性分析。研究以每千汉字频率、词汇丰富度、句段结构、复句关系、叙事描写及HSK等级词汇指标为基础，经稀疏性、共线性、变量级MSA和共同度筛选后，采用MinRes提取与Promax斜交旋转形成最终多维结构。",
     )
     add_paragraph(
         document,
@@ -559,7 +560,7 @@ def build_report(analysis_dir: Path, output_path: Path) -> None:
     document.add_heading("2 数据来源与样本结构", level=1)
     add_paragraph(
         document,
-        "分析数据来自项目根目录的《作文词性统计宽表.xlsx》。该表由清洗后的620篇作文通过PyNLPIR分词及项目语言特征脚本生成，每篇作文对应一行，包含基本信息、篇幅、词汇丰富度、词汇密度与词长、句段结构、词性、语法标记、篇章连接、记叙描写和HSK等级等301列。次数型指标均同时提供每千汉字频率，降低文本长度差异造成的机械影响。",
+        f"分析数据来自项目根目录的《作文词性统计宽表.xlsx》。该表由清洗后的620篇作文通过PyNLPIR分词及项目语言特征脚本生成，每篇作文对应一行，包含基本信息、篇幅、词汇丰富度、词汇密度与词长、句段结构、词性、熟语、语法标记、复句关系、记叙描写和HSK等级等{column_count}列。次数型指标均同时提供每千汉字频率，降低文本长度差异造成的机械影响。",
     )
     add_dataframe_table(
         document,
@@ -840,7 +841,7 @@ def build_report(analysis_dir: Path, output_path: Path) -> None:
     document.add_heading("12 结论", level=1)
     add_paragraph(
         document,
-        f"基于620篇HSK作文的301列统计宽表，本报告建立了一个由{selected['feature_count']}项语言指标构成的五维MF/MD结构。该结构在统计诊断与Bootstrap检验中表现稳定，能够将四个题目组的语言差异概括为词汇丰富度、基础词汇与叙事推进、人称指涉与信息密度、句法延展以及动作过程五个相互关联的方向。",
+        f"基于620篇HSK作文的{column_count}列统计宽表，本报告建立了一个由{selected['feature_count']}项语言指标构成的五维MF/MD结构。该结构在统计诊断与Bootstrap检验中表现稳定，能够将四个题目组的语言差异概括为词汇丰富度、基础词汇与叙事推进、人称指涉与信息密度、句法延展以及动作过程五个相互关联的方向。",
     )
     add_paragraph(
         document,
