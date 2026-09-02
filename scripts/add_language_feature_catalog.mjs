@@ -2,9 +2,10 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
-import { FileBlob, SpreadsheetFile } from "@oai/artifact-tool";
+import { FileBlob, SpreadsheetFile, Workbook } from "@oai/artifact-tool";
 
 const DEFAULT_INPUTS = ["作文词性统计宽表.xlsx", "母语作文词性统计宽表.xlsx"];
+const DEFAULT_OUTPUT = "语言特征说明.xlsx";
 const SHEET_NAME = "语言特征说明";
 
 const CATEGORY_COLORS = {
@@ -149,16 +150,18 @@ const DESCRIPTION_OVERRIDES = {
 
 function parseArgs(argv) {
   const inputs = [];
+  let output = DEFAULT_OUTPUT;
   let previewDir = "tmp/language_feature_catalog/final";
   let dryRun = false;
   for (let index = 2; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--input") inputs.push(argv[++index]);
+    else if (arg === "--output") output = argv[++index];
     else if (arg === "--preview-dir") previewDir = argv[++index];
     else if (arg === "--dry-run") dryRun = true;
     else throw new Error(`未知参数：${arg}`);
   }
-  return { inputs: inputs.length ? inputs : DEFAULT_INPUTS, previewDir, dryRun };
+  return { inputs: inputs.length ? inputs : DEFAULT_INPUTS, output, previewDir, dryRun };
 }
 
 function parseCsv(text) {
@@ -311,7 +314,7 @@ async function addCatalogSheet(workbook, catalogRows) {
   sheet.getRange("A1").values = [["语言特征说明"]];
   sheet.mergeCells("A2:F2");
   sheet.getRange("A2").values = [[
-    "本表按语言学项目汇总宽表字段；“识别与统计口径”使用中文说明，同一项目的次数、每千汉字频率、占比、词种数或TTR合并为一行。精确公式请查阅“字段说明”sheet。",
+    "本表按语言学项目汇总两份作文统计宽表的字段；“识别与统计口径”使用中文说明，同一项目的次数、每千汉字频率、占比、词种数或TTR合并为一行。精确公式及分母以宽表中的“字段说明”sheet为准。",
   ]];
 
   const headers = ["大类", "ID", "特征中文名", "识别与统计口径", "例（Example）", "宽表对应字段"];
@@ -371,9 +374,9 @@ async function addCatalogSheet(workbook, catalogRows) {
   return { sheet, lastRow };
 }
 
-async function updateWorkbook(inputPath, catalogRows, previewDir) {
-  const absolutePath = path.resolve(inputPath);
-  const workbook = await SpreadsheetFile.importXlsx(await FileBlob.load(absolutePath));
+async function createCatalogWorkbook(outputPath, catalogRows, previewDir) {
+  const absolutePath = path.resolve(outputPath);
+  const workbook = Workbook.create();
   const { lastRow } = await addCatalogSheet(workbook, catalogRows);
 
   const check = await workbook.inspect({
@@ -389,22 +392,53 @@ async function updateWorkbook(inputPath, catalogRows, previewDir) {
     kind: "match",
     searchTerm: "#REF!|#DIV/0!|#VALUE!|#NAME\\?|#N/A",
     options: { useRegex: true, maxResults: 300 },
-    summary: `final formula error scan: ${path.basename(inputPath)}`,
+    summary: `final formula error scan: ${path.basename(outputPath)}`,
   });
   console.log(errors.ndjson);
 
   await fs.mkdir(previewDir, { recursive: true });
   for (const [label, range] of [["top", "A1:F30"], ["middle", "A70:F100"], ["bottom", `A${Math.max(5, lastRow - 24)}:F${lastRow}`]]) {
     const preview = await workbook.render({ sheetName: SHEET_NAME, range, scale: 1.3, format: "png" });
-    const outputName = `${path.parse(inputPath).name}_${label}.png`;
+    const outputName = `${path.parse(outputPath).name}_${label}.png`;
     await fs.writeFile(path.join(previewDir, outputName), new Uint8Array(await preview.arrayBuffer()));
   }
+
+  const temporaryPath = path.join(path.dirname(absolutePath), `.${path.basename(absolutePath)}.tmp.xlsx`);
+  const output = await SpreadsheetFile.exportXlsx(workbook);
+  await output.save(temporaryPath);
+  await fs.rename(temporaryPath, absolutePath);
+  console.log(`Created ${absolutePath}: ${catalogRows.length} language features`);
+}
+
+async function removeCatalogSheet(inputPath) {
+  const absolutePath = path.resolve(inputPath);
+  const workbook = await SpreadsheetFile.importXlsx(await FileBlob.load(absolutePath));
+  const sheetInfo = await workbook.inspect({ kind: "sheet", include: "id,name", maxChars: 6000 });
+  const sheetNames = parseSheetNames(sheetInfo);
+  if (!sheetNames.includes(SHEET_NAME)) {
+    console.log(`Skipped ${absolutePath}: no ${SHEET_NAME} sheet`);
+    return;
+  }
+  workbook.worksheets.getItem(SHEET_NAME).delete();
+
+  const remainingSheets = parseSheetNames(
+    await workbook.inspect({ kind: "sheet", include: "id,name", maxChars: 6000 }),
+  );
+  if (remainingSheets.includes(SHEET_NAME)) throw new Error(`${inputPath} 未能移除 ${SHEET_NAME} sheet`);
+
+  const errors = await workbook.inspect({
+    kind: "match",
+    searchTerm: "#REF!|#DIV/0!|#VALUE!|#NAME\\?|#N/A",
+    options: { useRegex: true, maxResults: 300 },
+    summary: `final formula error scan: ${path.basename(inputPath)}`,
+  });
+  console.log(errors.ndjson);
 
   const temporaryPath = path.join(path.dirname(absolutePath), `.${path.basename(absolutePath)}.catalog.tmp.xlsx`);
   const output = await SpreadsheetFile.exportXlsx(workbook);
   await output.save(temporaryPath);
   await fs.rename(temporaryPath, absolutePath);
-  console.log(`Updated ${absolutePath}: ${catalogRows.length} language features`);
+  console.log(`Updated ${absolutePath}: removed ${SHEET_NAME} sheet`);
 }
 
 async function main() {
@@ -419,10 +453,11 @@ async function main() {
   const catalogRows = buildCatalog(fieldRows, lexiconExamples);
   if (catalogRows.length !== 178) throw new Error(`语言特征目录应为178项，实际为${catalogRows.length}项`);
   if (args.dryRun) {
-    console.log(`校验通过：${catalogRows.length}项语言特征，${args.inputs.length}个目标工作簿。`);
+    console.log(`校验通过：${catalogRows.length}项语言特征，将生成 ${args.output} 并清理${args.inputs.length}个宽表。`);
     return;
   }
-  for (const input of args.inputs) await updateWorkbook(input, catalogRows, args.previewDir);
+  await createCatalogWorkbook(args.output, catalogRows, args.previewDir);
+  for (const input of args.inputs) await removeCatalogSheet(input);
 }
 
 await main();
