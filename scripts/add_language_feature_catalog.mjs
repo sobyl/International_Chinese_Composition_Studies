@@ -11,6 +11,7 @@ const SHEET_NAME = "语言特征说明";
 const CATEGORY_COLORS = {
   基础篇幅: "#375623",
   词汇丰富度: "#8064A2",
+  词汇集中度: "#6F5A8A",
   词汇密度与词长: "#C65911",
   句段结构: "#BF9000",
   词性: "#548235",
@@ -131,6 +132,7 @@ const STATIC_EXAMPLES = {
 };
 
 const DESCRIPTION_OVERRIDES = {
+  篇内高频词前10位: "篇内最高频10个非标点词形的覆盖程度；依据胡显耀TOP10概念改造为篇级词汇集中度指标，非原论文的子语料库统计",
   名词词汇多样性: "名词token去重后的词种规模及其相对丰富度",
   动词词汇多样性: "动词token去重后的词种规模及其相对丰富度",
   形容词词汇多样性: "性质形容词、区别词和状态词合并后的词种规模及其相对丰富度",
@@ -277,8 +279,9 @@ function buildCatalog(fieldRows, lexiconExamples) {
   for (const field of fieldRows) {
     const key = canonicalFeature(field["字段名"], field["类别"], allNames);
     if (!key) continue;
-    const groupKey = `${field["类别"]}\u0000${key}`;
-    if (!groups.has(groupKey)) groups.set(groupKey, { category: field["类别"], name: key, fields: [] });
+    const category = key === "篇内高频词前10位" ? "词汇集中度" : field["类别"];
+    const groupKey = `${category}\u0000${key}`;
+    if (!groups.has(groupKey)) groups.set(groupKey, { category, name: key, fields: [] });
     groups.get(groupKey).fields.push(field);
   }
 

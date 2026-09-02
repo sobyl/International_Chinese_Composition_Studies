@@ -9,6 +9,7 @@
 ├── 4.14作文前筛.xlsx
 ├── 作文样本主表.xlsx
 ├── 作文词性统计宽表.xlsx
+├── 作文新增语言特征统计宽表.xlsx
 ├── 语言特征说明.xlsx
 ├── 作文语言特征多维分析报告.docx
 ├── 作文语言特征多维分析报告.pdf
@@ -29,6 +30,7 @@
 │   ├── segment_hsk_clean_texts.py
 │   ├── linguistic_features.py
 │   ├── add_language_feature_catalog.mjs
+│   ├── build_added_feature_workbook.mjs
 │   ├── analyze_composition_mfmd.py
 │   ├── build_mfmd_workbook.mjs
 │   ├── build_mfmd_report.py
@@ -91,6 +93,7 @@
 - `作文样本主表.xlsx`：当前主要迭代用表。四个 sheet 分别为 `J1`、`J2`、`Y1`、`Y2`，每个 sheet 155 篇。表内包含作文基本信息，并增加了 `作文文件名` 字段，例如 `J1_55_01`、`J1_60_02`。
 - `outputs/新版HSK词汇大纲.csv`：从新版 HSK 考试大纲提取的 11,000 条机器可读词汇，包含主等级、兼属等级、词语、拼音和词性等字段。
 - `作文词性统计宽表.xlsx`：项目最终主分析表，基于 `clean_text` 全量生成，当前为620行、392列。`词性统计` sheet 每行对应一篇作文，`字段说明` sheet 逐列记录定义、公式和分母；后续统计分析应优先使用此表。
+- `作文新增语言特征统计宽表.xlsx`：在不修改主宽表的前提下，单独汇总2026年9月1日扩展的63项语言特征。第一张表保留8列作文基本信息和127个新增统计字段，共135列；第二张表记录对应字段口径。
 - `语言特征说明.xlsx`：独立的语言特征目录，将两份宽表的392个统计字段归并为178项语言特征，以中文列出识别与统计口径、例项和对应字段。
 - `作文语言特征多维分析报告.docx`、`作文语言特征多维分析报告.pdf`：基于620篇作文和此前301列宽表生成的29页中文MF/MD学术分析报告，包含11幅统计图、五维解释、四组比较、分数关系、补充国籍分析及匿名文本例证。该报告保留为既有分析版本，尚未用本次392列新口径重新拟合。
 - `作文语言特征与母语参照综合分析报告.docx`、`作文语言特征与母语参照综合分析报告.pdf`：把620篇学习者作文MF/MD分析、180篇公开网络母语参照分析和母语样本审计摘要组织为同一研究链条的综合报告；当前仍对应此前301列分析版本，尚未用392列新口径重新拟合。
@@ -122,6 +125,7 @@
 - `scripts/segment_hsk_clean_texts.py`：使用 PyNLPIR 对 `clean_text` 分词，生成 `seg_text` 和语言特征宽表；细粒度词性用于语法特征，大类中文词性继续写入分词文本。
 - `scripts/linguistic_features.py`：不依赖 PyNLPIR 运行环境的纯计算模块，负责词汇、句段、熟语、语法、复句、记叙描写和 HSK 派生特征。
 - `scripts/add_language_feature_catalog.mjs`：读取宽表的 `字段说明`，将相关次数、每千汉字频率、占比和多样性指标归并为178项语言特征，生成根目录独立文件 `语言特征说明.xlsx`，并从两份宽表移除旧的同名sheet。
+- `scripts/build_added_feature_workbook.mjs`：从主宽表抽取8列基本信息及2026年9月1日新增的127个统计字段，生成独立的新增语言特征宽表，不修改主宽表。
 - `scripts/analyze_composition_mfmd.py`：以根目录主宽表为输入，完成变量筛选、平行分析、MinRes/Promax因子分析、Bootstrap稳定性、组间比较和稳健回归，并输出CSV、JSON与统计图。
 - `scripts/build_mfmd_workbook.mjs`：使用 `@oai/artifact-tool` 将分析JSON整理为多sheet结果工作簿。
 - `scripts/build_mfmd_report.py`：根据正式分析结果和图片生成中文DOCX分析报告；PDF由最终DOCX统一导出。
@@ -179,6 +183,14 @@ node scripts/add_language_feature_catalog.mjs
 ```
 
 命令默认生成根目录 `语言特征说明.xlsx`，并确保学习者与母语两份宽表不再包含同名sheet。说明表固定使用 `大类、ID、特征中文名、识别与统计口径、例（Example）、宽表对应字段` 六列；特征名称和口径说明只用中文。可用 `--dry-run` 只校验归并结果，使用 `--output` 指定新文件路径，或重复传入 `--input` 指定待清理的宽表。
+
+单独生成新增语言特征统计宽表：
+
+```bash
+node scripts/build_added_feature_workbook.mjs
+```
+
+该命令默认读取 `作文词性统计宽表.xlsx` 和 `语言特征说明.xlsx`，生成根目录 `作文新增语言特征统计宽表.xlsx`。其中 `篇内高频词前10位`按“词汇集中度”解释，并明确标注为由胡显耀TOP10概念改造的篇级指标。
 
 本次扩展的主要口径如下：
 
